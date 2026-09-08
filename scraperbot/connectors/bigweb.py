@@ -27,21 +27,32 @@ class BigWebConnector(StoreConnector):
 
     async def search(self, card: CardPrint) -> list[StoreOffer]:
         cardset_id = await self._cardset_id(card.set_code)
-        rarity_ids = [await self._rarity_id(cardset_id, card.rarity)] if card.rarity else list(
-            (await self._rarities_for_set(cardset_id)).values()
-        )
-        payloads = await asyncio.gather(
-            *(
-                self._get_json(
-                    f"{self.api_base_url}/products",
-                    params={"game_id": self.game_id, "cardsets": cardset_id, "rarity": rarity_id, "is_box": 0},
-                )
-                for rarity_id in rarity_ids
-            )
-        )
+        params: dict[str, object] = {"game_id": self.game_id, "cardsets": cardset_id, "is_box": 0}
+        if card.rarity:
+            params["rarity"] = await self._rarity_id(cardset_id, card.rarity)
+        payloads = await self._product_pages(params)
         if any(not payload.get("success") for payload in payloads):
             raise StoreUnavailableError("BigWeb returned an unsuccessful product response.")
         return self.parse_items(card, [item for payload in payloads for item in payload.get("items", [])])
+
+    async def _product_pages(self, params: Mapping[str, object]) -> list[Mapping[str, Any]]:
+        """Fetch all pages once when the selected card's rarity is unknown.
+
+        The public endpoint accepts a card set without a rarity and returns
+        every variant in paginated batches. This is markedly cheaper than one
+        request per rarity and keeps a name lookup responsive.
+        """
+        first = await self._get_json(f"{self.api_base_url}/products", params=params)
+        page_count = int((first.get("pagenate") or {}).get("pageCount") or 1)
+        if page_count <= 1:
+            return [first]
+        remaining = await asyncio.gather(
+            *(
+                self._get_json(f"{self.api_base_url}/products", params={**params, "page": page})
+                for page in range(2, page_count + 1)
+            )
+        )
+        return [first, *remaining]
 
     async def _cardset_id(self, set_code: str) -> int:
         if self._cardsets is None:

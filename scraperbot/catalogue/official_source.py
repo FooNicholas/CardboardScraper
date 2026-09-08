@@ -65,8 +65,8 @@ class OfficialEnglishCardSource:
             cards.extend(self.parse_card_entries(extra_html))
         return cards
 
-    async def cards_for_sets(self, set_codes: Iterable[str]) -> list[CardPrint]:
-        """Load exact official product groups for the requested printed set codes."""
+    async def expansions_for_sets(self, set_codes: Iterable[str]) -> list[OfficialExpansion]:
+        """Resolve printed set codes to official product groups."""
         wanted = {normalise_set_code(code) for code in set_codes}
         expansions = await self.list_expansions()
         selected = [
@@ -80,6 +80,11 @@ class OfficialEnglishCardSource:
             raise OfficialSourceError(
                 "The official English database does not list these sets yet: " + ", ".join(missing)
             )
+        return selected
+
+    async def cards_for_sets(self, set_codes: Iterable[str]) -> list[CardPrint]:
+        """Load exact official product groups for the requested printed set codes."""
+        selected = await self.expansions_for_sets(set_codes)
         cards: list[CardPrint] = []
         for expansion in selected:
             cards.extend(await self.cards_for_expansion(expansion))
@@ -111,7 +116,11 @@ class OfficialEnglishCardSource:
     def parse_card_entries(cls, html: str) -> list[CardPrint]:
         soup = BeautifulSoup(html, "lxml")
         cards: list[CardPrint] = []
-        for item in soup.select("#cardlist-container li"):
+        # The first response has a ``#cardlist-container`` wrapper. The
+        # documented ``cardsearch_ex`` follow-up endpoint returns only
+        # ``<li class=\"ex-item\">`` fragments, so accept either shape.
+        items = soup.select("#cardlist-container li") or soup.select("li.ex-item")
+        for item in items:
             number_node = item.select_one(".number")
             name_node = item.select_one("h5")
             link = item.select_one("a[href]")

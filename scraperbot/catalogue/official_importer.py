@@ -5,22 +5,32 @@ from __future__ import annotations
 import argparse
 import asyncio
 from pathlib import Path
+from collections.abc import Callable
 
 from scraperbot.catalogue.official_source import OfficialEnglishCardSource, OfficialSourceError
 from scraperbot.catalogue.repository import CatalogueRepository
 
 
-async def import_official_sets(database: Path, set_codes: list[str], *, all_sets: bool = False) -> int:
+async def import_official_sets(
+    database: Path,
+    set_codes: list[str],
+    *,
+    all_sets: bool = False,
+    progress: Callable[[int, int, str, int], None] | None = None,
+) -> int:
     source = OfficialEnglishCardSource()
     if all_sets:
         expansions = await source.list_expansions()
-        cards = []
-        for expansion in expansions:
-            cards.extend(await source.cards_for_expansion(expansion))
     else:
-        cards = await source.cards_for_sets(set_codes)
+        expansions = await source.expansions_for_sets(set_codes)
     with CatalogueRepository(database) as catalogue:
-        return catalogue.import_many(cards)
+        imported = 0
+        for index, expansion in enumerate(expansions, start=1):
+            cards = await source.cards_for_expansion(expansion)
+            imported += catalogue.import_many(cards)
+            if progress:
+                progress(index, len(expansions), expansion.set_code or expansion.title, len(cards))
+        return imported
 
 
 async def list_official_sets() -> list[str]:
@@ -43,7 +53,16 @@ def main() -> None:
     if not args.sets and not args.all_sets:
         parser.error("supply at least one --set or choose --all")
     try:
-        count = asyncio.run(import_official_sets(args.database, args.sets, all_sets=args.all_sets))
+        count = asyncio.run(
+            import_official_sets(
+                args.database,
+                args.sets,
+                all_sets=args.all_sets,
+                progress=lambda index, total, label, cards: print(
+                    f"[{index}/{total}] {label}: {cards} card prints", flush=True
+                ),
+            )
+        )
     except OfficialSourceError as error:
         parser.exit(2, f"Official import failed: {error}\n")
     print(f"Imported {count} English card prints into {args.database}.")

@@ -25,3 +25,11 @@ def test_parse_expansions_and_official_card_entries() -> None:
 def test_parse_page_count_defaults_to_one() -> None:
     assert OfficialEnglishCardSource.parse_page_count("var max_page = 3;") == 3
     assert OfficialEnglishCardSource.parse_page_count("no pagination") == 1
+
+
+def test_parse_card_entries_accepts_lazy_loaded_fragments() -> None:
+    cards = OfficialEnglishCardSource.parse_card_entries(
+        '''<li class="ex-item"><a href="/cardlist/?cardno=DZ-BT15/025EN">
+        <div class="number">DZ-BT15/025EN</div><h5>Example Card</h5></a></li>'''
+    )
+    assert [(card.set_code, card.collector_number) for card in cards] == [("DZBT15", "025")]

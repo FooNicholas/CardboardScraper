@@ -72,6 +72,24 @@ class CatalogueRepository:
         return int(self.connection.execute("SELECT COUNT(*) FROM card_prints").fetchone()[0])
 
     def upsert(self, card: CardPrint) -> CardPrint:
+        stored = self._upsert(card)
+        self.connection.commit()
+        return stored
+
+    def import_many(self, cards: Iterable[CardPrint]) -> int:
+        """Import a batch in one SQLite transaction instead of one per card."""
+        imported = 0
+        try:
+            for card in cards:
+                self._upsert(card)
+                imported += 1
+        except Exception:
+            self.connection.rollback()
+            raise
+        self.connection.commit()
+        return imported
+
+    def _upsert(self, card: CardPrint) -> CardPrint:
         if not card.english_name:
             raise ValueError("A card print requires an English name.")
         aliases_json = json.dumps(card.aliases, ensure_ascii=False)
@@ -114,15 +132,7 @@ class CatalogueRepository:
         ).fetchone()
         assert row is not None
         self._refresh_search_row(row)
-        self.connection.commit()
         return self._to_card(row)
-
-    def import_many(self, cards: Iterable[CardPrint]) -> int:
-        imported = 0
-        for card in cards:
-            self.upsert(card)
-            imported += 1
-        return imported
 
     def get(self, print_id: int) -> CardPrint | None:
         row = self.connection.execute("SELECT * FROM card_prints WHERE id = ?", (print_id,)).fetchone()
