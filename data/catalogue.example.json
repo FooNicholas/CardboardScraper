@@ -1,0 +1,14 @@
+{
+  "card_prints": [
+    {
+      "set_code": "DZBT16",
+      "collector_number": "015",
+      "rarity": "FFR",
+      "english_name": "Example card name",
+      "japanese_name": "カード名",
+      "aliases": ["common shorthand"],
+      "source": "official-card-list",
+      "source_url": "https://en.cf-vanguard.com/cardlist/"
+    }
+  ]
+}
