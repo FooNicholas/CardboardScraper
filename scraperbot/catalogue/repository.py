@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS card_prints (
 
 CREATE INDEX IF NOT EXISTS idx_card_prints_name ON card_prints(normalised_name);
 CREATE INDEX IF NOT EXISTS idx_card_prints_rarity ON card_prints(rarity);
+CREATE INDEX IF NOT EXISTS idx_card_prints_source ON card_prints(source);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS card_search USING fts5(
     print_id UNINDEXED,
@@ -137,6 +138,23 @@ class CatalogueRepository:
     def get(self, print_id: int) -> CardPrint | None:
         row = self.connection.execute("SELECT * FROM card_prints WHERE id = ?", (print_id,)).fetchone()
         return self._to_card(row) if row else None
+
+    def has_official_expansion(self, expansion_id: int) -> bool:
+        """Whether a completed official import already wrote this expansion.
+
+        Official detail URLs include the stable product expansion identifier.
+        It makes a lengthy one-time import resumable after a transient network
+        failure without a second bookkeeping database.
+        """
+        row = self.connection.execute(
+            """
+            SELECT 1 FROM card_prints
+            WHERE source = 'official-english' AND source_url LIKE ?
+            LIMIT 1
+            """,
+            (f"%expansion={expansion_id}%",),
+        ).fetchone()
+        return row is not None
 
     def search(self, query: str, *, rarity: str | None = None, limit: int = 8) -> list[CardPrint]:
         """Search English names and aliases by prefix, substring, and typo score."""

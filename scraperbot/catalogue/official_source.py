@@ -38,9 +38,16 @@ class OfficialEnglishCardSource:
     card_search_url = f"{base_url}/cardlist/cardsearch/"
     card_search_extra_url = f"{base_url}/cardlist/cardsearch_ex/"
 
-    def __init__(self, client: httpx.AsyncClient | None = None, *, page_delay: float = 0.15) -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient | None = None,
+        *,
+        page_delay: float = 0.15,
+        request_attempts: int = 3,
+    ) -> None:
         self.client = client
         self.page_delay = page_delay
+        self.request_attempts = request_attempts
 
     async def list_expansions(self) -> list[OfficialExpansion]:
         html = await self._get_text(self.card_list_url)
@@ -173,12 +180,23 @@ class OfficialEnglishCardSource:
 
     async def _get_text(self, url: str, *, params: dict[str, object] | None = None) -> str:
         headers = {"User-Agent": "ScraperBot/0.1 (+local catalogue import; polite sequential requests)"}
-        if self.client:
-            response = await self.client.get(url, params=params, headers=headers)
-        else:
-            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                response = await client.get(url, params=params, headers=headers)
-        response.raise_for_status()
+        response: httpx.Response | None = None
+        for attempt in range(1, self.request_attempts + 1):
+            try:
+                if self.client:
+                    response = await self.client.get(url, params=params, headers=headers)
+                else:
+                    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                        response = await client.get(url, params=params, headers=headers)
+                response.raise_for_status()
+                break
+            except (httpx.TimeoutException, httpx.TransportError, httpx.HTTPStatusError) as error:
+                if attempt == self.request_attempts:
+                    raise OfficialSourceError(
+                        f"The official endpoint failed after {self.request_attempts} attempts."
+                    ) from error
+                await asyncio.sleep(attempt)
+        assert response is not None
         html = response.text
         # ``cardsearch_ex`` intentionally returns bare ``<li>`` elements for
         # the next page, so validating for a full document here would reject a

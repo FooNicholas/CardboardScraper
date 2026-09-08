@@ -16,7 +16,7 @@ async def import_official_sets(
     set_codes: list[str],
     *,
     all_sets: bool = False,
-    progress: Callable[[int, int, str, int], None] | None = None,
+    progress: Callable[[int, int, str, int | None], None] | None = None,
 ) -> int:
     source = OfficialEnglishCardSource()
     if all_sets:
@@ -26,6 +26,10 @@ async def import_official_sets(
     with CatalogueRepository(database) as catalogue:
         imported = 0
         for index, expansion in enumerate(expansions, start=1):
+            if all_sets and catalogue.has_official_expansion(expansion.id):
+                if progress:
+                    progress(index, len(expansions), expansion.set_code or expansion.title, None)
+                continue
             cards = await source.cards_for_expansion(expansion)
             imported += catalogue.import_many(cards)
             if progress:
@@ -59,7 +63,9 @@ def main() -> None:
                 args.sets,
                 all_sets=args.all_sets,
                 progress=lambda index, total, label, cards: print(
-                    f"[{index}/{total}] {label}: {cards} card prints", flush=True
+                    f"[{index}/{total}] {label}: "
+                    f"{'already imported' if cards is None else f'{cards} card prints'}",
+                    flush=True,
                 ),
             )
         )

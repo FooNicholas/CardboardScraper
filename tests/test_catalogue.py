@@ -49,3 +49,19 @@ def test_importer_accepts_card_prints_envelope(tmp_path: Path) -> None:
     with CatalogueRepository(database) as catalogue:
         card = catalogue.search("chrono jet")[0]
         assert card.display_code == "DZBT01/001 · RRR"
+
+
+def test_repository_detects_completed_official_expansion(tmp_path: Path) -> None:
+    with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
+        catalogue.upsert(
+            CardPrint(
+                set_code="D-BT06",
+                collector_number="010",
+                rarity="",
+                english_name="Example Card",
+                source="official-english",
+                source_url="https://en.cf-vanguard.com/cardlist/?cardno=D-BT06/010EN&expansion=99",
+            )
+        )
+        assert catalogue.has_official_expansion(99)
+        assert not catalogue.has_official_expansion(100)
