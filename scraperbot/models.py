@@ -49,11 +49,13 @@ class CardPrint:
 
     @property
     def print_key(self) -> str:
-        return f"{self.set_code}/{self.collector_number}:{self.rarity}"
+        suffix = f":{self.rarity}" if self.rarity else ""
+        return f"{self.set_code}/{self.collector_number}{suffix}"
 
     @property
     def display_code(self) -> str:
-        return f"{self.set_code}/{self.collector_number} · {self.rarity}"
+        base = f"{self.set_code}/{self.collector_number}"
+        return f"{base} · {self.rarity}" if self.rarity else base
 
     @property
     def search_terms(self) -> tuple[str, ...]:

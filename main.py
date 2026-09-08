@@ -1,83 +1,10 @@
-import os
-import asyncio
-from contextlib import asynccontextmanager
+"""Compatibility entry point for ``python main.py``."""
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-import uvicorn
+from scraperbot.main import run
 
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder, 
-    CommandHandler, 
-    MessageHandler, 
-    ConversationHandler, 
-    filters, 
-    CallbackContext
-)
 
-from scrapers.yuyutei.yuyutei_scraper import YuyuTeiScraper
-from scrapers.bigweb.bigweb_scraper import BigWebScraper
-from services.translation_service import TranslationService
-from utils.error_handling import (
-    log_error, 
-    ScraperError, 
-    NetworkError, 
-    ParseError
-)
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
-#configuration
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-
-translation_service = TranslationService()
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__)) 
-BIGWEB_MAPPING_FILE = os.path.join(BASE_DIR, "scrapers", "bigweb", "bigweb_mapping.json")
-
-scrapers = {
-    'yuyutei': YuyuTeiScraper(translator=translation_service),
-    'bigweb': BigWebScraper(mapping_file=BIGWEB_MAPPING_FILE,translator=translation_service)
-}
-
-#states for conversation handler
-SITE, SET_NUMBER, RARITY = range(3)
-
-#on startup / shutdown
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-
-    try:
-        bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
-        
-        #setup conversation handler
-        conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("start", start)],
-            states={
-                SITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_site)],
-                SET_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_set_number)],
-                RARITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rarity)]
-            },
-            fallbacks=[CommandHandler("cancel", cancel)]
-        )
-        
-        bot_application.add_handler(conv_handler)
-        
-        await bot_application.initialize()
-        await bot_application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
-        
-        app.state.bot_application = bot_application
-        
-        yield
-    except Exception as e:
-        logger.error(f"Startup error: {e}")
-        raise
-
-app = FastAPI(lifespan=lifespan)
+if __name__ == "__main__":
+    run()
 
 #telegrambot handlers
 async def start(update: Update, context: CallbackContext):
