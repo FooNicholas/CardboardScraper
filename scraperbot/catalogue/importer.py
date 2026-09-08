@@ -26,7 +26,7 @@ def records_from_json(path: Path) -> list[CardPrint]:
             CardPrint(
                 set_code=record["set_code"],
                 collector_number=record.get("collector_number", record.get("card_number", "")),
-                rarity=record["rarity"],
+                rarity=record.get("rarity", ""),
                 english_name=record["english_name"],
                 japanese_name=record.get("japanese_name"),
                 aliases=tuple(record.get("aliases", [])),

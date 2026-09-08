@@ -27,19 +27,21 @@ class BigWebConnector(StoreConnector):
 
     async def search(self, card: CardPrint) -> list[StoreOffer]:
         cardset_id = await self._cardset_id(card.set_code)
-        rarity_id = await self._rarity_id(cardset_id, card.rarity)
-        payload = await self._get_json(
-            f"{self.api_base_url}/products",
-            params={
-                "game_id": self.game_id,
-                "cardsets": cardset_id,
-                "rarity": rarity_id,
-                "is_box": 0,
-            },
+        rarity_ids = [await self._rarity_id(cardset_id, card.rarity)] if card.rarity else list(
+            (await self._rarities_for_set(cardset_id)).values()
         )
-        if not payload.get("success"):
+        payloads = await asyncio.gather(
+            *(
+                self._get_json(
+                    f"{self.api_base_url}/products",
+                    params={"game_id": self.game_id, "cardsets": cardset_id, "rarity": rarity_id, "is_box": 0},
+                )
+                for rarity_id in rarity_ids
+            )
+        )
+        if any(not payload.get("success") for payload in payloads):
             raise StoreUnavailableError("BigWeb returned an unsuccessful product response.")
-        return self.parse_items(card, payload.get("items", []))
+        return self.parse_items(card, [item for payload in payloads for item in payload.get("items", [])])
 
     async def _cardset_id(self, set_code: str) -> int:
         if self._cardsets is None:
@@ -60,6 +62,13 @@ class BigWebConnector(StoreConnector):
         return cardset_id
 
     async def _rarity_id(self, cardset_id: int, rarity: str) -> int:
+        rarities = await self._rarities_for_set(cardset_id)
+        rarity_id = rarities.get(rarity.strip().upper())
+        if rarity_id is None:
+            raise StoreUnavailableError(f"BigWeb does not list rarity {rarity} for this set.")
+        return rarity_id
+
+    async def _rarities_for_set(self, cardset_id: int) -> dict[str, int]:
         if cardset_id not in self._rarities:
             async with self._cache_lock:
                 if cardset_id not in self._rarities:
@@ -69,10 +78,7 @@ class BigWebConnector(StoreConnector):
                         for entry in payload.get("rarities", [])
                         if entry.get("name")
                     }
-        rarity_id = self._rarities[cardset_id].get(rarity.strip().upper())
-        if rarity_id is None:
-            raise StoreUnavailableError(f"BigWeb does not list rarity {rarity} for this set.")
-        return rarity_id
+        return self._rarities[cardset_id]
 
     async def _get_json(self, url: str, *, params: Mapping[str, Any] | None = None) -> Any:
         headers = {"User-Agent": "ScraperBot/0.1 (+personal price comparison)"}
