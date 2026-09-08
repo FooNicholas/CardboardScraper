@@ -20,6 +20,7 @@ dist/
 htmlcov/
 .mypy_cache/
 output/playwright/
+.playwright-cli/
 
 # Runtime state and browser assets
 data/*.sqlite3
