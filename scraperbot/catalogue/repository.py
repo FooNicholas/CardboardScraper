@@ -149,10 +149,11 @@ class CatalogueRepository:
         row = self.connection.execute(
             """
             SELECT 1 FROM card_prints
-            WHERE source = 'official-english' AND source_url LIKE ?
+            WHERE source = 'official-english'
+              AND (source_url LIKE ? OR source_url LIKE ?)
             LIMIT 1
             """,
-            (f"%expansion={expansion_id}%",),
+            (f"%expansion={expansion_id}&%", f"%expansion={expansion_id}"),
         ).fetchone()
         return row is not None
 

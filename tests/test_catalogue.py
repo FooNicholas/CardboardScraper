@@ -65,3 +65,14 @@ def test_repository_detects_completed_official_expansion(tmp_path: Path) -> None
         )
         assert catalogue.has_official_expansion(99)
         assert not catalogue.has_official_expansion(100)
+        catalogue.upsert(
+            CardPrint(
+                set_code="D-BT06",
+                collector_number="011",
+                rarity="",
+                english_name="Another Card",
+                source="official-english",
+                source_url="https://en.cf-vanguard.com/cardlist/?cardno=D-BT06/011EN&expansion=230",
+            )
+        )
+        assert not catalogue.has_official_expansion(23)
