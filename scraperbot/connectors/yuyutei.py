@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import re
-from typing import Any
 from urllib.parse import urljoin
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 import httpx
 
 from scraperbot.connectors.base import StoreConnector, StoreUnavailableError, price_from_text, references_card

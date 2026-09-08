@@ -13,7 +13,7 @@ import re
 from typing import Iterable
 from urllib.parse import parse_qs, urljoin, urlparse
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 import httpx
 
 from scraperbot.models import CardPrint, normalise_set_code

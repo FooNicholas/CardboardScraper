@@ -9,20 +9,18 @@ description = "A Cardfight!! Vanguard price-comparison Telegram bot"
 requires-python = ">=3.11"
 dependencies = [
   "beautifulsoup4>=4.12,<5",
-  "fastapi>=0.115,<1",
   "httpx>=0.27,<1",
   "lxml>=5,<7",
-  "playwright>=1.51,<2",
   "python-dotenv>=1.0,<2",
   "python-telegram-bot>=21.10,<22",
   "rapidfuzz>=3.10,<4",
-  "uvicorn[standard]>=0.32,<1",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3,<9",
   "pytest-asyncio>=0.24,<1",
+  "playwright>=1.51,<2",
 ]
 
 [project.scripts]

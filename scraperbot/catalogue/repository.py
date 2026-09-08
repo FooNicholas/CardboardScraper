@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sqlite3
-from typing import Iterable, Sequence
+from typing import Iterable
 
 from rapidfuzz import fuzz
 
