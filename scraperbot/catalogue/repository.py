@@ -158,6 +158,33 @@ class CatalogueRepository:
                 if not japanese:
                     unmatched += 1
                     continue
+                official_rows = self._official_english_by_reference(
+                    mapping.set_code, mapping.collector_number
+                )
+                existing_mapping = self.connection.execute(
+                    "SELECT mapping_source FROM english_name_mappings WHERE japanese_print_id = ?",
+                    (japanese["id"],),
+                ).fetchone()
+                if existing_mapping and existing_mapping["mapping_source"] == "official-english" and (
+                    mapping.source != "official-english"
+                ):
+                    preserved_official += 1
+                    continue
+                # An exact official-English print is a stronger source than a
+                # community page, even when the caller has not synced the
+                # official links beforehand.
+                if official_rows and mapping.source != "official-english":
+                    official = official_rows[0]
+                    mapping = EnglishNameMapping(
+                        set_code=official["set_code"],
+                        collector_number=official["collector_number"],
+                        rarity=official["rarity"] or japanese["rarity"],
+                        english_name=official["english_name"],
+                        aliases=tuple(json.loads(official["aliases_json"])),
+                        source="official-english",
+                        source_url=official["source_url"] or "https://en.cf-vanguard.com/cardlist/",
+                        status="official",
+                    )
                 rarity = mapping.rarity or japanese["rarity"]
                 if mapping.rarity and mapping.rarity != japanese["rarity"]:
                     self.connection.execute(
@@ -192,15 +219,8 @@ class CatalogueRepository:
                         mapping.status,
                     ),
                 )
-                official = self.connection.execute(
-                    """
-                    SELECT 1 FROM card_prints
-                    WHERE set_code = ? AND collector_number = ? AND source = 'official-english'
-                    LIMIT 1
-                    """,
-                    (mapping.set_code, mapping.collector_number),
-                ).fetchone()
-                if official:
+                if official_rows:
+                    self._link_japanese_name_to_official_cards(official_rows, japanese["japanese_name"])
                     preserved_official += 1
                     continue
                 self._upsert(
@@ -246,15 +266,11 @@ class CatalogueRepository:
                             source_mapping.status,
                         ),
                     )
-                    official = self.connection.execute(
-                        """
-                        SELECT 1 FROM card_prints
-                        WHERE set_code = ? AND collector_number = ? AND source = 'official-english'
-                        LIMIT 1
-                        """,
-                        (set_code, japanese["collector_number"]),
-                    ).fetchone()
-                    if official:
+                    official_rows = self._official_english_by_reference(
+                        set_code, japanese["collector_number"]
+                    )
+                    if official_rows:
+                        self._link_japanese_name_to_official_cards(official_rows, japanese["japanese_name"])
                         preserved_official += 1
                         continue
                     self._upsert(
@@ -276,6 +292,38 @@ class CatalogueRepository:
             raise
         self.connection.commit()
         return MappingImportResult(mapped, derived, unmatched, preserved_official)
+
+    def official_english_name_mappings(self) -> list[EnglishNameMapping]:
+        """Return exact Japanese/official-English matches for a local sync.
+
+        Matching is by printed set code and collector number, never merely by
+        card name. This retains distinct Japanese and English printings while
+        making an official English name searchable for the Japanese print.
+        """
+        rows = self.connection.execute(
+            """
+            SELECT j.set_code, j.collector_number, j.rarity AS japanese_rarity,
+                   c.rarity, c.english_name, c.aliases_json, c.source_url
+            FROM japanese_prints AS j
+            JOIN card_prints AS c
+              ON c.set_code = j.set_code AND c.collector_number = j.collector_number
+            WHERE c.source = 'official-english'
+            ORDER BY j.set_code, j.collector_number, c.rarity
+            """
+        ).fetchall()
+        return [
+            EnglishNameMapping(
+                set_code=row["set_code"],
+                collector_number=row["collector_number"],
+                rarity=row["rarity"] or row["japanese_rarity"],
+                english_name=row["english_name"],
+                aliases=tuple(json.loads(row["aliases_json"])),
+                source="official-english",
+                source_url=row["source_url"] or "https://en.cf-vanguard.com/cardlist/",
+                status="official",
+            )
+            for row in rows
+        ]
 
     def _upsert(self, card: CardPrint) -> CardPrint:
         if not card.english_name:
@@ -504,6 +552,29 @@ class CatalogueRepository:
         row = self._japanese_by_reference(card.set_code, card.collector_number)
         assert row is not None
         return row
+
+    def _official_english_by_reference(self, set_code: str, collector_number: str) -> list[sqlite3.Row]:
+        return self.connection.execute(
+            """
+            SELECT * FROM card_prints
+            WHERE set_code = ? AND collector_number = ? AND source = 'official-english'
+            """,
+            (set_code, collector_number),
+        ).fetchall()
+
+    def _link_japanese_name_to_official_cards(
+        self, official_rows: Iterable[sqlite3.Row], japanese_name: str
+    ) -> None:
+        for official in official_rows:
+            self.connection.execute(
+                "UPDATE card_prints SET japanese_name = ?, imported_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (japanese_name, official["id"]),
+            )
+            refreshed = self.connection.execute(
+                "SELECT * FROM card_prints WHERE id = ?", (official["id"],)
+            ).fetchone()
+            assert refreshed is not None
+            self._refresh_search_row(refreshed)
 
     def _japanese_by_reference(self, set_code: str, collector_number: str) -> sqlite3.Row | None:
         return self.connection.execute(

@@ -88,7 +88,41 @@ def test_mapping_does_not_overwrite_an_official_english_card(tmp_path: Path) -> 
             ]
         )
         assert result.preserved_official == 1
-        assert catalogue.search("official exacerbate")[0].source == "official-english"
+        official = catalogue.search("official exacerbate")[0]
+        assert official.source == "official-english"
+        assert official.japanese_name == "エグザサベイト・ドラゴン"
+
+
+def test_official_english_sync_has_precedence_over_a_fandom_name(tmp_path: Path) -> None:
+    with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
+        catalogue.upsert(
+            CardPrint(
+                set_code="D-BT01",
+                collector_number="001",
+                rarity="RRR",
+                english_name="Official Card Name",
+                source="official-english",
+                source_url="https://en.cf-vanguard.com/cardlist/?cardno=D-BT01/001EN",
+            )
+        )
+        catalogue.import_japanese_many(
+            [JapaneseCardPrint("D-BT01", "001", "RRR", "公式日本語名", "https://official/001")]
+        )
+        result = catalogue.apply_name_mappings(catalogue.official_english_name_mappings())
+        assert result.preserved_official == 1
+        assert catalogue.unmapped_japanese_count("DBT01") == 0
+
+        catalogue.apply_name_mappings(
+            [
+                EnglishNameMapping(
+                    "D-BT01", "001", "RRR", "Community Name", "fandom", "https://fandom/set"
+                )
+            ]
+        )
+        card = catalogue.search("official card name")[0]
+        assert card.source == "official-english"
+        assert card.japanese_name == "公式日本語名"
+        assert not catalogue.search("community name")
 
 
 def test_mapping_propagates_a_trusted_name_to_parallel_prints(tmp_path: Path) -> None:
