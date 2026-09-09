@@ -15,11 +15,16 @@ from scraperbot.catalogue.repository import CatalogueRepository
 def current_standard_expansions(expansions: list[OfficialExpansion]) -> list[OfficialExpansion]:
     """Keep D/DZ-era product pages, excluding V-series and older formats.
 
-    Bushiroad's public catalogue gives D-SD01 the product id 201.  Newer
-    annual PR pages use their four-digit year as the id, so they remain in the
-    current Standard-format catalogue as well.
+    Bushiroad's public catalogue gives D-SD01 the product id 201 and current
+    D/DZ products ids through 300. Annual PR pages use a four-digit year, so
+    2021 onward remains part of the current Standard-format catalogue while
+    the 2020 V-era PR page stays excluded.
     """
-    return [expansion for expansion in expansions if expansion.id >= 201]
+    return [
+        expansion
+        for expansion in expansions
+        if 201 <= expansion.id <= 300 or expansion.id >= 2021
+    ]
 
 
 async def import_japanese_sets(

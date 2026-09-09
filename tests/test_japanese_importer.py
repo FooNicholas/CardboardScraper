@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 
-from scraperbot.catalogue.japanese_importer import import_japanese_sets
+from scraperbot.catalogue.japanese_importer import current_standard_expansions, import_japanese_sets
 from scraperbot.catalogue.official_source import OfficialExpansion
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.models import JapaneseCardPrint
@@ -38,3 +38,16 @@ def test_full_japanese_import_resumes_by_product_checkpoint(tmp_path: Path) -> N
     assert source.calls == [201]
     with CatalogueRepository(database) as catalogue:
         assert catalogue.japanese_count == 1
+
+
+def test_current_standard_expansions_excludes_v_era_prs() -> None:
+    selected = current_standard_expansions(
+        [
+            OfficialExpansion(190, "V-BT01", "V-series"),
+            OfficialExpansion(201, "D-SD01", "D-series"),
+            OfficialExpansion(300, "DZ-BT16", "DZ-series"),
+            OfficialExpansion(2020, None, "2020 PR"),
+            OfficialExpansion(2021, None, "2021 PR"),
+        ]
+    )
+    assert [expansion.id for expansion in selected] == [201, 300, 2021]
