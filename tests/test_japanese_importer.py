@@ -1,7 +1,11 @@
 import asyncio
 from pathlib import Path
 
-from scraperbot.catalogue.japanese_importer import current_standard_expansions, import_japanese_sets
+from scraperbot.catalogue.japanese_importer import (
+    current_standard_expansions,
+    current_standard_prints,
+    import_japanese_sets,
+)
 from scraperbot.catalogue.official_source import OfficialExpansion
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.models import JapaneseCardPrint
@@ -51,3 +55,14 @@ def test_current_standard_expansions_excludes_v_era_prs() -> None:
         ]
     )
     assert [expansion.id for expansion in selected] == [201, 300, 2021]
+
+
+def test_current_standard_prints_exclude_legacy_promo_codes() -> None:
+    cards = [
+        JapaneseCardPrint("D-PR", "001", "", "D promo", "https://official/d"),
+        JapaneseCardPrint("DZ-BT01", "001", "", "DZ card", "https://official/dz"),
+        JapaneseCardPrint("CP", "001", "", "Campaign", "https://official/cp"),
+        JapaneseCardPrint("PR", "0774", "", "Legacy promo", "https://official/pr"),
+        JapaneseCardPrint("V-BT01", "001", "", "V card", "https://official/v"),
+    ]
+    assert [card.set_code for card in current_standard_prints(cards)] == ["DPR", "DZBT01", "CP"]

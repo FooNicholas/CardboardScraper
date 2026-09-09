@@ -24,6 +24,13 @@ def test_fandom_search_term_restores_set_code_hyphens() -> None:
     assert FandomMappingSource._search_term("PR") == "PR"
 
 
+def test_fandom_has_curated_promo_list_pages() -> None:
+    assert FandomMappingSource.known_list_pages == {
+        "CP": "List of D Promo Cards",
+        "DPR": "List of D Promo Cards",
+    }
+
+
 def test_parse_fandom_promo_list_to_mappings() -> None:
     mappings = FandomMappingSource.parse_list_mappings(
         '''<ul>

@@ -23,6 +23,10 @@ class FandomMappingSource:
 
     api_url = "https://cardfight.fandom.com/api.php"
     wiki_base_url = "https://cardfight.fandom.com/wiki/"
+    known_list_pages = {
+        "CP": "List of D Promo Cards",
+        "DPR": "List of D Promo Cards",
+    }
 
     def __init__(
         self,
@@ -39,7 +43,13 @@ class FandomMappingSource:
         self, set_code: str, *, page_title: str | None = None
     ) -> tuple[str, list[EnglishNameMapping]]:
         wanted = normalise_set_code(set_code)
-        titles = [page_title] if page_title else await self._candidate_titles(self._search_term(set_code))
+        titles = (
+            [page_title]
+            if page_title
+            else [self.known_list_pages[wanted]]
+            if wanted in self.known_list_pages
+            else await self._candidate_titles(self._search_term(set_code))
+        )
         best_title = ""
         best_mappings: list[EnglishNameMapping] = []
         for title in titles:

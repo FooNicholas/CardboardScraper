@@ -10,6 +10,7 @@ from pathlib import Path
 from scraperbot.catalogue.japanese_source import OfficialJapaneseCardSource
 from scraperbot.catalogue.official_source import OfficialSourceError
 from scraperbot.catalogue.repository import CatalogueRepository
+from scraperbot.models import JapaneseCardPrint
 
 
 def current_standard_expansions(expansions: list[OfficialExpansion]) -> list[OfficialExpansion]:
@@ -25,6 +26,11 @@ def current_standard_expansions(expansions: list[OfficialExpansion]) -> list[Off
         for expansion in expansions
         if 201 <= expansion.id <= 300 or expansion.id >= 2021
     ]
+
+
+def current_standard_prints(cards: list[JapaneseCardPrint]) -> list[JapaneseCardPrint]:
+    """Keep D/DZ print codes and the D-era campaign code CP only."""
+    return [card for card in cards if card.set_code.startswith("D") or card.set_code == "CP"]
 
 
 async def import_japanese_sets(
@@ -50,6 +56,8 @@ async def import_japanese_sets(
                     progress(index, len(expansions), label, None)
                 continue
             cards = await source.cards_for_expansion(expansion)
+            if all_sets:
+                cards = current_standard_prints(cards)
             imported += catalogue.import_japanese_many(cards)
             catalogue.mark_japanese_expansion_imported(expansion.id)
             if progress:

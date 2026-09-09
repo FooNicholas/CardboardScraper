@@ -82,6 +82,7 @@ deliberately excludes V-series and older formats:
 scraperbot-import-japanese --all
 scraperbot-link-official-japanese
 scraperbot-map-fandom --all
+scraperbot-derive-japanese-names
 ```
 
 The first command imports the official Japanese print master: Japanese name,
@@ -94,6 +95,10 @@ to its parallel prints only when the official Japanese name is identical.
 The bulk Fandom command only visits sets with remaining unmapped Japanese
 prints; it keeps going if a page is unavailable and reports those sets for
 review.
+
+Finally, the derivation command resolves reprints only when the exact Japanese
+name has one unambiguous existing English mapping. It never uses machine
+translation or guesses from similar names.
 
 When Bushiroad later publishes an English print, the official-English importer
 always preserves that name rather than replacing it with a Fandom mapping.

@@ -325,6 +325,57 @@ class CatalogueRepository:
             for row in rows
         ]
 
+    def derive_name_mappings_from_known_japanese_names(self) -> MappingImportResult:
+        """Map reprints when their Japanese name has one trusted English name.
+
+        This never translates text. A candidate is accepted only when every
+        existing mapping for the exact Japanese name agrees on one English
+        name; official-English provenance wins when it is available.
+        """
+        rows = self.connection.execute(
+            """
+            WITH known_names AS (
+                SELECT j.japanese_name
+                FROM japanese_prints AS j
+                JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+                GROUP BY j.japanese_name
+                HAVING COUNT(DISTINCT m.english_name) = 1
+            ), ranked_sources AS (
+                SELECT j.japanese_name, m.english_name, m.mapping_source,
+                       m.mapping_source_url,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY j.japanese_name
+                           ORDER BY CASE WHEN m.mapping_source = 'official-english' THEN 0 ELSE 1 END,
+                                    m.imported_at DESC
+                       ) AS source_rank
+                FROM japanese_prints AS j
+                JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+                JOIN known_names AS known ON known.japanese_name = j.japanese_name
+            )
+            SELECT j.set_code, j.collector_number, j.rarity, source.english_name,
+                   source.mapping_source, source.mapping_source_url
+            FROM japanese_prints AS j
+            LEFT JOIN english_name_mappings AS mapped ON mapped.japanese_print_id = j.id
+            JOIN ranked_sources AS source
+              ON source.japanese_name = j.japanese_name AND source.source_rank = 1
+            WHERE mapped.japanese_print_id IS NULL
+            ORDER BY j.set_code, j.collector_number
+            """
+        ).fetchall()
+        mappings = [
+            EnglishNameMapping(
+                set_code=row["set_code"],
+                collector_number=row["collector_number"],
+                rarity=row["rarity"],
+                english_name=row["english_name"],
+                source="official-english" if row["mapping_source"] == "official-english" else "fandom",
+                source_url=row["mapping_source_url"],
+                status="derived",
+            )
+            for row in rows
+        ]
+        return self.apply_name_mappings(mappings)
+
     def _upsert(self, card: CardPrint) -> CardPrint:
         if not card.english_name:
             raise ValueError("A card print requires an English name.")
