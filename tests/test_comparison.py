@@ -60,3 +60,10 @@ def test_comparison_uses_cache_until_refreshed() -> None:
     assert connector.calls == 1
     asyncio.run(service.compare(CARD, refresh=True))
     assert connector.calls == 2
+
+
+def test_comparison_reports_a_store_with_no_active_listing() -> None:
+    service = ComparisonService([FixedConnector("empty", [])])
+    result = asyncio.run(service.compare(CARD))
+    assert result.no_active_listing_stores == ("Empty",)
+    assert "sold out or not stocked" in format_comparison(result)

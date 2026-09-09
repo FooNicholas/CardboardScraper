@@ -34,6 +34,7 @@ class ComparisonService:
             return_exceptions=True,
         )
         offers: list[StoreOffer] = []
+        no_active_listing: list[str] = []
         unavailable: list[str] = []
         failed: list[str] = []
         for connector, outcome in zip(self.connectors, results, strict=True):
@@ -42,11 +43,15 @@ class ComparisonService:
             elif isinstance(outcome, Exception):
                 failed.append(connector.store_name)
             else:
-                offers.extend(outcome)
+                if outcome:
+                    offers.extend(outcome)
+                else:
+                    no_active_listing.append(connector.store_name)
 
         result = ComparisonResult(
             card=card,
             offers=tuple(sorted(offers, key=self._offer_sort_key)),
+            no_active_listing_stores=tuple(no_active_listing),
             unavailable_stores=tuple(unavailable),
             failed_stores=tuple(failed),
         )

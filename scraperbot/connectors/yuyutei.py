@@ -46,16 +46,20 @@ class YuyuTeiConnector(StoreConnector):
             if not cls._contains_print_reference(card, item_text):
                 continue
             card_link = item.select_one("a[href*='/sell/vg/card/']")
-            stock_text = item_text
+            stock_match = re.search(r"在庫\s*[:：]\s*(\d+)", item_text)
             price = price_from_text(price_element.get_text(" ", strip=True))
-            stock_zero = "在庫" in stock_text and any(marker in stock_text for marker in ("在庫 : 0", "在庫：0", "在庫なし"))
-            availability = Availability.SOLD_OUT if stock_zero else Availability.IN_STOCK
+            if stock_match:
+                availability = Availability.SOLD_OUT if int(stock_match.group(1)) == 0 else Availability.IN_STOCK
+            elif any(marker in item_text for marker in ("在庫なし", "売り切れ", "SOLD OUT")):
+                availability = Availability.SOLD_OUT
+            else:
+                availability = Availability.UNKNOWN
             offers.append(
                 StoreOffer(
                     store_id=cls.store_id,
                     store_name=cls.store_name,
                     raw_name=name_heading.get_text(" ", strip=True),
-                    price_yen=price if availability == Availability.IN_STOCK else None,
+                    price_yen=price if availability != Availability.SOLD_OUT else None,
                     price_display=f"¥{price:,}" if price is not None and availability == Availability.IN_STOCK else "Sold out",
                     availability=availability,
                     listing_url=urljoin(cls.base_url, card_link["href"]) if card_link else None,

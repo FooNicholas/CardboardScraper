@@ -28,6 +28,11 @@ def format_comparison(result: ComparisonResult) -> str:
                 lines.append(f"{store}: {price}")
     else:
         lines.append("No matching offers found.")
+    if result.no_active_listing_stores:
+        lines.append(
+            "No active listing (sold out or not stocked): "
+            + escape(", ".join(result.no_active_listing_stores))
+        )
     if result.unavailable_stores:
         lines.append(f"Not listed: {escape(', '.join(result.unavailable_stores))}")
     if result.failed_stores:

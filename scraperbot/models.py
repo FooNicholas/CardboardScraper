@@ -132,5 +132,6 @@ class StoreOffer:
 class ComparisonResult:
     card: CardPrint
     offers: tuple[StoreOffer, ...]
+    no_active_listing_stores: tuple[str, ...] = ()
     unavailable_stores: tuple[str, ...] = ()
     failed_stores: tuple[str, ...] = ()

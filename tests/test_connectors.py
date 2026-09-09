@@ -57,3 +57,14 @@ def test_yuyutei_matches_print_reference_without_translating() -> None:
     assert offers[0].raw_name == "エグザサベイト・ドラゴン"
     assert offers[0].price_yen == 1280
     assert offers[0].listing_url == "https://yuyu-tei.jp/sell/vg/card/dzbt16/999"
+
+
+def test_yuyutei_marks_an_explicit_zero_stock_listing_sold_out() -> None:
+    html = """
+    <div class="col-md"><span>DZ-BT16/FFR02</span><h4>エグザサベイト・ドラゴン</h4>
+    <strong>1,280 円</strong><span>在庫：0 点</span></div>
+    """
+    offer = YuyuTeiConnector.parse_html(CARD, html)[0]
+    assert offer.availability == Availability.SOLD_OUT
+    assert offer.price_display == "Sold out"
+    assert offer.price_yen is None
