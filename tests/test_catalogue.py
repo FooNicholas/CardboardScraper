@@ -76,3 +76,10 @@ def test_repository_detects_completed_official_expansion(tmp_path: Path) -> None
             )
         )
         assert not catalogue.has_official_expansion(23)
+
+
+def test_japanese_import_checkpoint_records_completed_empty_products(tmp_path: Path) -> None:
+    with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
+        assert not catalogue.has_japanese_expansion(300)
+        catalogue.mark_japanese_expansion_imported(300)
+        assert catalogue.has_japanese_expansion(300)

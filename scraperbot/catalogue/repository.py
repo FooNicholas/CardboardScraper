@@ -49,6 +49,11 @@ CREATE TABLE IF NOT EXISTS japanese_prints (
 
 CREATE INDEX IF NOT EXISTS idx_japanese_prints_set ON japanese_prints(set_code);
 
+CREATE TABLE IF NOT EXISTS japanese_expansion_imports (
+    expansion_id INTEGER PRIMARY KEY,
+    completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS english_name_mappings (
     japanese_print_id INTEGER PRIMARY KEY REFERENCES japanese_prints(id) ON DELETE CASCADE,
     english_name TEXT NOT NULL,
@@ -355,6 +360,39 @@ class CatalogueRepository:
             (f"%expansion={expansion_id}&%", f"%expansion={expansion_id}"),
         ).fetchone()
         return row is not None
+
+    def has_japanese_expansion(self, expansion_id: int) -> bool:
+        """Whether a Japanese product page has already been imported fully.
+
+        The explicit checkpoint also covers legitimate empty product pages.
+        The URL check makes the first full import resume cleanly from Japanese
+        cards that were imported before checkpoints were introduced.
+        """
+        checkpoint = self.connection.execute(
+            "SELECT 1 FROM japanese_expansion_imports WHERE expansion_id = ?", (expansion_id,)
+        ).fetchone()
+        if checkpoint:
+            return True
+        return self.connection.execute(
+            """
+            SELECT 1 FROM japanese_prints
+            WHERE source_url LIKE ? OR source_url LIKE ?
+            LIMIT 1
+            """,
+            (f"%expansion={expansion_id}&%", f"%expansion={expansion_id}"),
+        ).fetchone() is not None
+
+    def mark_japanese_expansion_imported(self, expansion_id: int) -> None:
+        """Record a completed Japanese product import after its cards commit."""
+        self.connection.execute(
+            """
+            INSERT INTO japanese_expansion_imports (expansion_id)
+            VALUES (?)
+            ON CONFLICT(expansion_id) DO UPDATE SET completed_at = CURRENT_TIMESTAMP
+            """,
+            (expansion_id,),
+        )
+        self.connection.commit()
 
     def search(self, query: str, *, rarity: str | None = None, limit: int = 8) -> list[CardPrint]:
         """Search English names and aliases by prefix, substring, and typo score."""

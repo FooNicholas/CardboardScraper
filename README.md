@@ -73,6 +73,13 @@ scraperbot-import-japanese --set DZ-BT16
 scraperbot-map-fandom --set DZ-BT16
 ```
 
+To build the complete Japanese print master, including Japanese editions of
+English releases, use the resumable full import:
+
+```bash
+scraperbot-import-japanese --all
+```
+
 The first command imports the official Japanese print master: Japanese name,
 set code, collector number, and the official card URL. The second reads the
 trusted Cardfight!! Vanguard Wiki Fandom set page through its public API and

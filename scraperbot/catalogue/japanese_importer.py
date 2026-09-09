@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
 
 from scraperbot.catalogue.japanese_source import OfficialJapaneseCardSource
@@ -11,23 +12,61 @@ from scraperbot.catalogue.official_source import OfficialSourceError
 from scraperbot.catalogue.repository import CatalogueRepository
 
 
-async def import_japanese_sets(database: Path, set_codes: list[str]) -> int:
-    source = OfficialJapaneseCardSource()
-    expansions = await source.expansions_for_sets(set_codes)
+async def import_japanese_sets(
+    database: Path,
+    set_codes: list[str],
+    *,
+    all_sets: bool = False,
+    progress: Callable[[int, int, str, int | None], None] | None = None,
+    source: OfficialJapaneseCardSource | None = None,
+) -> int:
+    source = source or OfficialJapaneseCardSource()
+    expansions = await source.list_expansions() if all_sets else await source.expansions_for_sets(set_codes)
     with CatalogueRepository(database) as catalogue:
         imported = 0
-        for expansion in expansions:
-            imported += catalogue.import_japanese_many(await source.cards_for_expansion(expansion))
+        for index, expansion in enumerate(expansions, start=1):
+            label = expansion.set_code or expansion.title
+            if all_sets and catalogue.has_japanese_expansion(expansion.id):
+                if progress:
+                    progress(index, len(expansions), label, None)
+                continue
+            cards = await source.cards_for_expansion(expansion)
+            imported += catalogue.import_japanese_many(cards)
+            catalogue.mark_japanese_expansion_imported(expansion.id)
+            if progress:
+                progress(index, len(expansions), label, len(cards))
     return imported
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Import official Japanese Vanguard print data into the local master.")
-    parser.add_argument("--set", dest="sets", action="append", required=True, help="Japanese set code, e.g. DZ-BT16")
+    parser.add_argument("--set", dest="sets", action="append", default=[], help="Japanese set code, e.g. DZ-BT16")
+    parser.add_argument("--all", dest="all_sets", action="store_true", help="Import every listed Japanese product")
+    parser.add_argument("--list-sets", action="store_true", help="List official Japanese products and exit")
     parser.add_argument("--database", type=Path, default=Path("data/catalogue.sqlite3"))
     args = parser.parse_args()
+    if args.list_sets:
+        try:
+            expansions = asyncio.run(OfficialJapaneseCardSource().list_expansions())
+        except OfficialSourceError as error:
+            parser.exit(2, f"Japanese product listing failed: {error}\n")
+        print("\n".join(f"{expansion.set_code or 'unrecognised'}\t{expansion.title}" for expansion in expansions))
+        return
+    if not args.sets and not args.all_sets:
+        parser.error("supply at least one --set or choose --all")
     try:
-        count = asyncio.run(import_japanese_sets(args.database, args.sets))
+        count = asyncio.run(
+            import_japanese_sets(
+                args.database,
+                args.sets,
+                all_sets=args.all_sets,
+                progress=lambda index, total, label, cards: print(
+                    f"[{index}/{total}] {label}: "
+                    f"{'already imported' if cards is None else f'{cards} Japanese prints'}",
+                    flush=True,
+                ),
+            )
+        )
     except OfficialSourceError as error:
         parser.exit(2, f"Japanese import failed: {error}\n")
     print(f"Imported {count} official Japanese prints into {args.database}.")
