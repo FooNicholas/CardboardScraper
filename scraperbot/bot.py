@@ -4,45 +4,18 @@ from __future__ import annotations
 
 from html import escape
 from typing import Final
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.models import CardPrint
+from scraperbot.query import parse_name_query
 from scraperbot.services.comparison import ComparisonService
 from scraperbot.services.formatting import format_card_choices, format_comparison
 
 
-# Kept deliberately small and easy to extend. A user may append one of these
-# to a name (for example: "/price Youthberk FFR") to narrow the suggestions.
-KNOWN_RARITIES: Final[frozenset[str]] = frozenset(
-    {
-        "C",
-        "R",
-        "RR",
-        "RRR",
-        "SR",
-        "FR",
-        "FFR",
-        "DSR",
-        "SEC",
-        "SER",
-        "EX",
-        "EXRRR",
-        "SNR",
-    }
-)
 MAX_CHOICES: Final = 8
-
-
-def parse_name_query(raw_query: str) -> tuple[str, str | None]:
-    """Split an optional trailing rarity from a user-facing name query."""
-    words = raw_query.strip().split()
-    if len(words) > 1 and words[-1].upper() in KNOWN_RARITIES:
-        return " ".join(words[:-1]), words[-1].upper()
-    return " ".join(words), None
 
 
 def choice_keyboard(cards: list[CardPrint]) -> InlineKeyboardMarkup:

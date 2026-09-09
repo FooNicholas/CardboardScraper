@@ -63,6 +63,20 @@ blastr blade
 The number and rarity shown in selection buttons identify the chosen print;
 users never need to remember or type them.
 
+## Use it in a browser
+
+Run the local browser interface in one terminal, then open
+`http://127.0.0.1:8787` on this computer:
+
+```sh
+scraperbot-web
+```
+
+It uses the same local database, natural-language search, and store comparison
+services as Telegram. It does not need a Telegram token and is bound to this
+computer only by default. You can run `scraperbot` in another terminal to use
+Telegram at the same time.
+
 ## Japanese-only and newly released cards
 
 Japanese releases can arrive before Bushiroad publishes their official English

@@ -25,6 +25,7 @@ dev = [
 
 [project.scripts]
 scraperbot = "scraperbot.main:run"
+scraperbot-web = "scraperbot.web:main"
 scraperbot-import = "scraperbot.catalogue.importer:main"
 scraperbot-import-official = "scraperbot.catalogue.official_importer:main"
 scraperbot-import-japanese = "scraperbot.catalogue.japanese_importer:main"
