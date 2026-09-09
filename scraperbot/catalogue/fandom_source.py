@@ -45,7 +45,10 @@ class FandomMappingSource:
         for title in titles:
             if not title:
                 continue
-            mappings = self.parse_mappings(await self._page_html(title), set_code, source_url=self._page_url(title))
+            page_html = await self._page_html(title)
+            mappings = self.parse_mappings(page_html, set_code, source_url=self._page_url(title))
+            if not mappings:
+                mappings = self.parse_list_mappings(page_html, set_code, source_url=self._page_url(title))
             if len(mappings) > len(best_mappings):
                 best_title, best_mappings = title, mappings
             if self.page_delay:
@@ -128,6 +131,39 @@ class FandomMappingSource:
                 )
         return mappings
 
+    @classmethod
+    def parse_list_mappings(
+        cls, html: str, set_code: str, *, source_url: str
+    ) -> list[EnglishNameMapping]:
+        """Parse Fandom's promo-page ``CODE/NUMBER - Name`` list format."""
+        wanted = normalise_set_code(set_code)
+        soup = BeautifulSoup(html, "lxml")
+        mappings: list[EnglishNameMapping] = []
+        seen: set[str] = set()
+        for item in soup.select("li"):
+            parsed = cls._parse_list_reference(item.get_text(" ", strip=True))
+            link = item.select_one("a[title]")
+            if not parsed or not link:
+                continue
+            row_set, collector = parsed
+            if normalise_set_code(row_set) != wanted or collector in seen:
+                continue
+            name = unescape(link.get_text(" ", strip=True))
+            if not name or name in {"?", "???"}:
+                continue
+            seen.add(collector)
+            mappings.append(
+                EnglishNameMapping(
+                    set_code=row_set,
+                    collector_number=collector,
+                    rarity=cls._rarity(collector, ""),
+                    english_name=name,
+                    source="fandom",
+                    source_url=source_url,
+                )
+            )
+        return mappings
+
     @staticmethod
     def _normalise_header(value: str) -> str:
         return " ".join(value.casefold().replace(".", "").split())
@@ -135,6 +171,14 @@ class FandomMappingSource:
     @staticmethod
     def _parse_reference(value: str) -> tuple[str, str] | None:
         matched = re.search(r"([A-Za-z]+-[A-Za-z]+\d+(?:-[A-Za-z]+)?)/([A-Za-z0-9-]+)", value)
+        if not matched:
+            return None
+        set_code, collector = matched.groups()
+        return set_code, collector[:-2] if collector.endswith("EN") else collector
+
+    @staticmethod
+    def _parse_list_reference(value: str) -> tuple[str, str] | None:
+        matched = re.match(r"\s*([A-Za-z]+(?:-[A-Za-z]+)?\d*)/([A-Za-z0-9-]+)\s*-", value)
         if not matched:
             return None
         set_code, collector = matched.groups()

@@ -22,3 +22,19 @@ def test_fandom_search_term_restores_set_code_hyphens() -> None:
     assert FandomMappingSource._search_term("DTTD04") == "D-TTD04"
     assert FandomMappingSource._search_term("DPR") == "D-PR"
     assert FandomMappingSource._search_term("PR") == "PR"
+
+
+def test_parse_fandom_promo_list_to_mappings() -> None:
+    mappings = FandomMappingSource.parse_list_mappings(
+        '''<ul>
+        <li>D-PR/006 - <a title="Blazing Spear Dragon">Blazing Spear Dragon</a></li>
+        <li>D-PR/007 - <a title="Direful Doll, Violetta">Direful Doll, Violetta</a></li>
+        <li>CP/001 - <a title="Other">Other</a></li>
+        </ul>''',
+        "D-PR",
+        source_url="https://cardfight.fandom.com/wiki/List_of_D_Promo_Cards",
+    )
+    assert [(mapping.collector_number, mapping.english_name) for mapping in mappings] == [
+        ("006", "Blazing Spear Dragon"),
+        ("007", "Direful Doll, Violetta"),
+    ]
