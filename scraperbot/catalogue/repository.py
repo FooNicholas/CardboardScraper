@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 import sqlite3
 from typing import Iterable
 
 from rapidfuzz import fuzz
 
-from scraperbot.models import CardPrint, normalise_text
+from scraperbot.models import CardPrint, EnglishNameMapping, JapaneseCardPrint, normalise_text
 
 
 SCHEMA = """
@@ -35,6 +36,29 @@ CREATE INDEX IF NOT EXISTS idx_card_prints_name ON card_prints(normalised_name);
 CREATE INDEX IF NOT EXISTS idx_card_prints_rarity ON card_prints(rarity);
 CREATE INDEX IF NOT EXISTS idx_card_prints_source ON card_prints(source);
 
+CREATE TABLE IF NOT EXISTS japanese_prints (
+    id INTEGER PRIMARY KEY,
+    set_code TEXT NOT NULL,
+    collector_number TEXT NOT NULL,
+    rarity TEXT NOT NULL DEFAULT '',
+    japanese_name TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(set_code, collector_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_japanese_prints_set ON japanese_prints(set_code);
+
+CREATE TABLE IF NOT EXISTS english_name_mappings (
+    japanese_print_id INTEGER PRIMARY KEY REFERENCES japanese_prints(id) ON DELETE CASCADE,
+    english_name TEXT NOT NULL,
+    aliases_json TEXT NOT NULL DEFAULT '[]',
+    mapping_source TEXT NOT NULL,
+    mapping_source_url TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'provisional',
+    imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS card_search USING fts5(
     print_id UNINDEXED,
     english_name,
@@ -43,6 +67,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS card_search USING fts5(
     tokenize = 'unicode61 remove_diacritics 2'
 );
 """
+
+
+@dataclass(frozen=True, slots=True)
+class MappingImportResult:
+    mapped: int
+    derived: int
+    unmatched: int
+    preserved_official: int
 
 
 class CatalogueRepository:
@@ -72,6 +104,10 @@ class CatalogueRepository:
     def count(self) -> int:
         return int(self.connection.execute("SELECT COUNT(*) FROM card_prints").fetchone()[0])
 
+    @property
+    def japanese_count(self) -> int:
+        return int(self.connection.execute("SELECT COUNT(*) FROM japanese_prints").fetchone()[0])
+
     def upsert(self, card: CardPrint) -> CardPrint:
         stored = self._upsert(card)
         self.connection.commit()
@@ -89,6 +125,152 @@ class CatalogueRepository:
             raise
         self.connection.commit()
         return imported
+
+    def import_japanese_many(self, cards: Iterable[JapaneseCardPrint]) -> int:
+        """Store official Japanese print data without requiring an English name."""
+        imported = 0
+        try:
+            for card in cards:
+                self._upsert_japanese(card)
+                imported += 1
+        except Exception:
+            self.connection.rollback()
+            raise
+        self.connection.commit()
+        return imported
+
+    def apply_name_mappings(self, mappings: Iterable[EnglishNameMapping]) -> MappingImportResult:
+        """Layer community English names over the Japanese print master.
+
+        A matching official-English card is never overwritten. Its publication
+        remains the authoritative replacement for a provisional mapping.
+        """
+        mapped = derived = unmatched = preserved_official = 0
+        mappings_by_japanese_name: dict[tuple[str, str], EnglishNameMapping] = {}
+        try:
+            for mapping in mappings:
+                japanese = self._japanese_by_reference(mapping.set_code, mapping.collector_number)
+                if not japanese:
+                    unmatched += 1
+                    continue
+                rarity = mapping.rarity or japanese["rarity"]
+                if mapping.rarity and mapping.rarity != japanese["rarity"]:
+                    self.connection.execute(
+                        "UPDATE japanese_prints SET rarity = ?, imported_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (mapping.rarity, japanese["id"]),
+                    )
+                    japanese = self._japanese_by_reference(mapping.set_code, mapping.collector_number)
+                    assert japanese is not None
+                mappings_by_japanese_name.setdefault(
+                    (mapping.set_code, japanese["japanese_name"]), mapping
+                )
+                self.connection.execute(
+                    """
+                    INSERT INTO english_name_mappings (
+                        japanese_print_id, english_name, aliases_json, mapping_source,
+                        mapping_source_url, status
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(japanese_print_id) DO UPDATE SET
+                        english_name = excluded.english_name,
+                        aliases_json = excluded.aliases_json,
+                        mapping_source = excluded.mapping_source,
+                        mapping_source_url = excluded.mapping_source_url,
+                        status = excluded.status,
+                        imported_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        japanese["id"],
+                        mapping.english_name,
+                        json.dumps(mapping.aliases, ensure_ascii=False),
+                        mapping.source,
+                        mapping.source_url,
+                        mapping.status,
+                    ),
+                )
+                official = self.connection.execute(
+                    """
+                    SELECT 1 FROM card_prints
+                    WHERE set_code = ? AND collector_number = ? AND source = 'official-english'
+                    LIMIT 1
+                    """,
+                    (mapping.set_code, mapping.collector_number),
+                ).fetchone()
+                if official:
+                    preserved_official += 1
+                    continue
+                self._upsert(
+                    CardPrint(
+                        set_code=mapping.set_code,
+                        collector_number=mapping.collector_number,
+                        rarity=rarity,
+                        english_name=mapping.english_name,
+                        japanese_name=japanese["japanese_name"],
+                        aliases=mapping.aliases,
+                        source=f"{mapping.source}-{mapping.status}",
+                        source_url=mapping.source_url,
+                    )
+                )
+                mapped += 1
+            # Fandom's set page names the base printing of many cards but may
+            # omit its FFR/SR/SEC parallel rows. Official Japanese data gives
+            # those rows the same Japanese name, so they can safely inherit
+            # that already-trusted English name without a machine translation.
+            for (set_code, japanese_name), source_mapping in mappings_by_japanese_name.items():
+                rows = self.connection.execute(
+                    """
+                    SELECT j.* FROM japanese_prints AS j
+                    LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+                    WHERE j.set_code = ? AND j.japanese_name = ? AND m.japanese_print_id IS NULL
+                    """,
+                    (set_code, japanese_name),
+                ).fetchall()
+                for japanese in rows:
+                    self.connection.execute(
+                        """
+                        INSERT INTO english_name_mappings (
+                            japanese_print_id, english_name, aliases_json, mapping_source,
+                            mapping_source_url, status
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            japanese["id"],
+                            source_mapping.english_name,
+                            json.dumps(source_mapping.aliases, ensure_ascii=False),
+                            f"{source_mapping.source}-derived",
+                            source_mapping.source_url,
+                            source_mapping.status,
+                        ),
+                    )
+                    official = self.connection.execute(
+                        """
+                        SELECT 1 FROM card_prints
+                        WHERE set_code = ? AND collector_number = ? AND source = 'official-english'
+                        LIMIT 1
+                        """,
+                        (set_code, japanese["collector_number"]),
+                    ).fetchone()
+                    if official:
+                        preserved_official += 1
+                        continue
+                    self._upsert(
+                        CardPrint(
+                            set_code=set_code,
+                            collector_number=japanese["collector_number"],
+                            rarity=japanese["rarity"],
+                            english_name=source_mapping.english_name,
+                            japanese_name=japanese["japanese_name"],
+                            aliases=source_mapping.aliases,
+                            source=f"{source_mapping.source}-derived-{source_mapping.status}",
+                            source_url=source_mapping.source_url,
+                        )
+                    )
+                    mapped += 1
+                    derived += 1
+        except Exception:
+            self.connection.rollback()
+            raise
+        self.connection.commit()
+        return MappingImportResult(mapped, derived, unmatched, preserved_official)
 
     def _upsert(self, card: CardPrint) -> CardPrint:
         if not card.english_name:
@@ -138,6 +320,23 @@ class CatalogueRepository:
     def get(self, print_id: int) -> CardPrint | None:
         row = self.connection.execute("SELECT * FROM card_prints WHERE id = ?", (print_id,)).fetchone()
         return self._to_card(row) if row else None
+
+    def unmapped_japanese_count(self, set_code: str | None = None) -> int:
+        conditions = ["m.japanese_print_id IS NULL"]
+        values: list[object] = []
+        if set_code:
+            conditions.append("j.set_code = ?")
+            values.append(set_code)
+        return int(
+            self.connection.execute(
+                f"""
+                SELECT COUNT(*) FROM japanese_prints AS j
+                LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+                WHERE {' AND '.join(conditions)}
+                """,
+                values,
+            ).fetchone()[0]
+        )
 
     def has_official_expansion(self, expansion_id: int) -> bool:
         """Whether a completed official import already wrote this expansion.
@@ -244,6 +443,35 @@ class CatalogueRepository:
                 " ".join(json.loads(row["aliases_json"])),
             ),
         )
+
+    def _upsert_japanese(self, card: JapaneseCardPrint) -> sqlite3.Row:
+        if not card.japanese_name:
+            raise ValueError("A Japanese print requires a Japanese name.")
+        self.connection.execute(
+            """
+            INSERT INTO japanese_prints (
+                set_code, collector_number, rarity, japanese_name, source_url
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(set_code, collector_number) DO UPDATE SET
+                rarity = CASE
+                    WHEN excluded.rarity != '' THEN excluded.rarity
+                    ELSE japanese_prints.rarity
+                END,
+                japanese_name = excluded.japanese_name,
+                source_url = excluded.source_url,
+                imported_at = CURRENT_TIMESTAMP
+            """,
+            (card.set_code, card.collector_number, card.rarity, card.japanese_name, card.source_url),
+        )
+        row = self._japanese_by_reference(card.set_code, card.collector_number)
+        assert row is not None
+        return row
+
+    def _japanese_by_reference(self, set_code: str, collector_number: str) -> sqlite3.Row | None:
+        return self.connection.execute(
+            "SELECT * FROM japanese_prints WHERE set_code = ? AND collector_number = ?",
+            (set_code, collector_number),
+        ).fetchone()
 
     @staticmethod
     def _to_card(row: sqlite3.Row) -> CardPrint:

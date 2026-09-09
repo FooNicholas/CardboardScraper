@@ -27,6 +27,8 @@ dev = [
 scraperbot = "scraperbot.main:run"
 scraperbot-import = "scraperbot.catalogue.importer:main"
 scraperbot-import-official = "scraperbot.catalogue.official_importer:main"
+scraperbot-import-japanese = "scraperbot.catalogue.japanese_importer:main"
+scraperbot-map-fandom = "scraperbot.catalogue.fandom_importer:main"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

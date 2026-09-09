@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 import re
 import unicodedata
@@ -59,6 +59,46 @@ class CardPrint:
     @property
     def search_terms(self) -> tuple[str, ...]:
         return (self.english_name, *self.aliases)
+
+
+@dataclass(frozen=True, slots=True)
+class JapaneseCardPrint:
+    """An official Japanese printing, kept even before an English name exists."""
+
+    set_code: str
+    collector_number: str
+    rarity: str
+    japanese_name: str
+    source_url: str
+    id: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "set_code", normalise_set_code(self.set_code))
+        object.__setattr__(self, "collector_number", normalise_collector_number(self.collector_number))
+        object.__setattr__(self, "rarity", self.rarity.strip().upper())
+        object.__setattr__(self, "japanese_name", self.japanese_name.strip())
+
+
+@dataclass(frozen=True, slots=True)
+class EnglishNameMapping:
+    """A reviewed English name for an official Japanese card print."""
+
+    set_code: str
+    collector_number: str
+    rarity: str
+    english_name: str
+    source: str
+    source_url: str
+    aliases: tuple[str, ...] = ()
+    status: str = "provisional"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "set_code", normalise_set_code(self.set_code))
+        object.__setattr__(self, "collector_number", normalise_collector_number(self.collector_number))
+        object.__setattr__(self, "rarity", self.rarity.strip().upper())
+        object.__setattr__(self, "english_name", self.english_name.strip())
+        object.__setattr__(self, "aliases", tuple(alias.strip() for alias in self.aliases if alias.strip()))
+        object.__setattr__(self, "status", self.status.strip().lower())
 
 
 class Availability(StrEnum):

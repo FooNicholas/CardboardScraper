@@ -65,22 +65,32 @@ users never need to remember or type them.
 
 ## Japanese-only and newly released cards
 
-The official English source currently covers releases through the product list
-it publishes. A Japanese retailer can list a newer set first. Add a reviewed
-mapping for those cards rather than translating in the Telegram request path:
+Japanese releases can arrive before Bushiroad publishes their official English
+card names. Refresh those cards in two explicit, local-only steps:
 
-1. Copy the shape in `data/catalogue.example.json` to a new JSON file.
-2. Use the Japanese print identifier from the retailer, its reviewed English
-   name, and useful alternate spellings in `aliases`.
-3. Import it into the same local catalogue:
+```sh
+scraperbot-import-japanese --set DZ-BT16
+scraperbot-map-fandom --set DZ-BT16
+```
 
-   ```sh
-   scraperbot-import your-reviewed-cards.json
-   ```
+The first command imports the official Japanese print master: Japanese name,
+set code, collector number, and the official card URL. The second reads the
+trusted Cardfight!! Vanguard Wiki Fandom set page through its public API and
+applies its English names as `provisional` mappings. A base-card Fandom name is
+safely propagated to its parallel prints only when the official Japanese name
+is identical.
 
-The importer upserts an exact `(set code, collector number, rarity)` record,
-so reviewed mappings can replace provisional information without changing bot
-code.
+When Bushiroad later publishes an English print, the official-English importer
+always preserves that name rather than replacing it with a Fandom mapping.
+There is still no translation request in the Telegram price path.
+
+For a correction or a source that is not on Fandom, copy the shape in
+`data/catalogue.example.json`, add aliases for alternate spellings, and import
+it with:
+
+```sh
+scraperbot-import your-reviewed-cards.json
+```
 
 ## Add another retailer
 
