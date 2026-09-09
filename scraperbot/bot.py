@@ -50,7 +50,7 @@ class TelegramPriceBot:
             await update.effective_message.reply_text(
                 "Send an English card name, even a partial one.\n"
                 "Examples: /price Youthberk, /price chronojet ffr\n\n"
-                "I will show matching prints, then compare the supported stores."
+                "I will show matching Japanese-market prints, then compare the supported stores."
             )
 
     async def sites(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -76,12 +76,12 @@ class TelegramPriceBot:
             await message.reply_text("Try a card name, such as: /price Youthberk")
             return
 
-        cards = self.catalogue.search(query, rarity=rarity, limit=MAX_CHOICES)
+        cards = self.catalogue.search(query, rarity=rarity, limit=MAX_CHOICES, japanese_only=True)
         if not cards:
             suffix = f" with rarity {rarity}" if rarity else ""
             await message.reply_text(
-                f"No local card print matched “{query}”{suffix}. "
-                "Import or refresh the catalogue first."
+                f"No Japanese-market card print matched “{query}”{suffix}. "
+                "Try a shorter spelling or refresh the catalogue."
             )
             return
 
@@ -101,7 +101,7 @@ class TelegramPriceBot:
         if selected_id not in allowed_ids:
             await callback.answer("That search selection has expired. Please search again.", show_alert=True)
             return
-        card = self.catalogue.get(selected_id)
+        card = self.catalogue.get(selected_id, japanese_only=True)
         if not card:
             await callback.answer("That card is no longer in the local catalogue.", show_alert=True)
             return

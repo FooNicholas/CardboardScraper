@@ -34,7 +34,11 @@ def test_search_supports_partial_alias_and_typo(tmp_path: Path) -> None:
         assert catalogue.search("youth berk")[0].collector_number == "015"
         assert catalogue.search("youthberk")[0].rarity == "FFR"
         assert catalogue.search("blastr")[0].english_name == "Blaster Blade"
-        assert catalogue.search("blaster", rarity="RRR")[0].collector_number == "016"
+        blaster = catalogue.search("blaster", rarity="RRR")[0]
+        assert blaster.collector_number == "016"
+        assert catalogue.search("skyfall", japanese_only=True)[0].english_name == 'Youthberk "Skyfall Arms"'
+        assert not catalogue.search("blaster", rarity="RRR", japanese_only=True)
+        assert catalogue.get(blaster.id or 0, japanese_only=True) is None
 
 
 def test_importer_accepts_card_prints_envelope(tmp_path: Path) -> None:

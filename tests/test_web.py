@@ -60,6 +60,22 @@ def test_local_web_search_and_comparison_share_the_catalogue(tmp_path: Path) -> 
         assert comparison["offers"][0]["match_confidence"] == "exact_japanese_name"
 
 
+def test_local_web_hides_english_only_prints(tmp_path: Path) -> None:
+    with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
+        english_only = catalogue.upsert(
+            CardPrint("DZ-BT16", "010", "RRR", "English-only printing", source="test")
+        )
+        app = LocalPriceCheckWeb(catalogue, ComparisonService([]))
+
+        assert app.search("english only")["cards"] == []
+        try:
+            asyncio.run(app.compare(english_only.id or 0))
+        except LookupError as error:
+            assert "Japanese-market" in str(error)
+        else:
+            raise AssertionError("English-only prints must not be comparable through the web API.")
+
+
 def test_local_web_rejects_an_empty_search(tmp_path: Path) -> None:
     with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
         app = LocalPriceCheckWeb(catalogue, ComparisonService([]))

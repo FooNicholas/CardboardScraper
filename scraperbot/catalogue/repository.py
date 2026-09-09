@@ -421,8 +421,14 @@ class CatalogueRepository:
         self._refresh_search_row(row)
         return self._to_card(row)
 
-    def get(self, print_id: int) -> CardPrint | None:
-        row = self.connection.execute("SELECT * FROM card_prints WHERE id = ?", (print_id,)).fetchone()
+    def get(self, print_id: int, *, japanese_only: bool = False) -> CardPrint | None:
+        """Return one print, optionally requiring a Japanese store-search name."""
+        conditions = ["id = ?"]
+        if japanese_only:
+            conditions.append("japanese_name IS NOT NULL AND TRIM(japanese_name) != ''")
+        row = self.connection.execute(
+            f"SELECT * FROM card_prints WHERE {' AND '.join(conditions)}", (print_id,)
+        ).fetchone()
         return self._to_card(row) if row else None
 
     def unmapped_japanese_count(self, set_code: str | None = None) -> int:
@@ -508,19 +514,31 @@ class CatalogueRepository:
         )
         self.connection.commit()
 
-    def search(self, query: str, *, rarity: str | None = None, limit: int = 8) -> list[CardPrint]:
-        """Search English names and aliases by prefix, substring, and typo score."""
+    def search(
+        self,
+        query: str,
+        *,
+        rarity: str | None = None,
+        limit: int = 8,
+        japanese_only: bool = False,
+    ) -> list[CardPrint]:
+        """Search English names and aliases by prefix, substring, and typo score.
+
+        ``japanese_only`` keeps user-facing store searches to prints that have
+        an official Japanese name. English-only catalogue records remain
+        available as a local mapping source, but Yuyu-Tei cannot list them.
+        """
         normalised_query = normalise_text(query)
         if not normalised_query:
             return []
         if rarity:
             rarity = rarity.strip().upper()
 
-        rows = self._fts_rows(normalised_query, rarity)
+        rows = self._fts_rows(normalised_query, rarity, japanese_only)
         if not rows:
-            rows = self._substring_rows(normalised_query, rarity)
+            rows = self._substring_rows(normalised_query, rarity, japanese_only)
         if not rows:
-            rows = self._all_rows(rarity)
+            rows = self._all_rows(rarity, japanese_only)
 
         ranked = sorted(
             ((self._score(normalised_query, row), self._to_card(row)) for row in rows),
@@ -528,7 +546,7 @@ class CatalogueRepository:
         )
         return [card for score, card in ranked if score >= 55][:limit]
 
-    def _fts_rows(self, query: str, rarity: str | None) -> list[sqlite3.Row]:
+    def _fts_rows(self, query: str, rarity: str | None, japanese_only: bool) -> list[sqlite3.Row]:
         tokens = [token for token in query.split() if token]
         if not tokens:
             return []
@@ -538,6 +556,8 @@ class CatalogueRepository:
         if rarity:
             conditions.append("p.rarity = ?")
             values.append(rarity)
+        if japanese_only:
+            conditions.append("p.japanese_name IS NOT NULL AND TRIM(p.japanese_name) != ''")
         try:
             return self.connection.execute(
                 f"""
@@ -551,20 +571,28 @@ class CatalogueRepository:
         except sqlite3.OperationalError:
             return []
 
-    def _substring_rows(self, query: str, rarity: str | None) -> list[sqlite3.Row]:
+    def _substring_rows(self, query: str, rarity: str | None, japanese_only: bool) -> list[sqlite3.Row]:
         conditions = ["(normalised_name LIKE ? OR normalised_aliases LIKE ?)"]
         values: list[object] = [f"%{query}%", f"%{query}%"]
         if rarity:
             conditions.append("rarity = ?")
             values.append(rarity)
+        if japanese_only:
+            conditions.append("japanese_name IS NOT NULL AND TRIM(japanese_name) != ''")
         return self.connection.execute(
             f"SELECT * FROM card_prints WHERE {' AND '.join(conditions)} LIMIT 120", values
         ).fetchall()
 
-    def _all_rows(self, rarity: str | None) -> list[sqlite3.Row]:
+    def _all_rows(self, rarity: str | None, japanese_only: bool) -> list[sqlite3.Row]:
+        conditions: list[str] = []
+        values: list[object] = []
         if rarity:
-            return self.connection.execute("SELECT * FROM card_prints WHERE rarity = ?", (rarity,)).fetchall()
-        return self.connection.execute("SELECT * FROM card_prints").fetchall()
+            conditions.append("rarity = ?")
+            values.append(rarity)
+        if japanese_only:
+            conditions.append("japanese_name IS NOT NULL AND TRIM(japanese_name) != ''")
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        return self.connection.execute(f"SELECT * FROM card_prints{where}", values).fetchall()
 
     @staticmethod
     def _score(query: str, row: sqlite3.Row) -> float:

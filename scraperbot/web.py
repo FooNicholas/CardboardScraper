@@ -35,7 +35,7 @@ class LocalPriceCheckWeb:
         query, rarity = parse_name_query(raw_query[:MAX_QUERY_LENGTH])
         if not query:
             raise ValueError("Enter a card name to search.")
-        cards = self.catalogue.search(query, rarity=rarity, limit=MAX_CHOICES)
+        cards = self.catalogue.search(query, rarity=rarity, limit=MAX_CHOICES, japanese_only=True)
         return {
             "query": query,
             "rarity": rarity,
@@ -43,9 +43,9 @@ class LocalPriceCheckWeb:
         }
 
     async def compare(self, print_id: int, *, refresh: bool = False) -> dict[str, Any]:
-        card = self.catalogue.get(print_id)
+        card = self.catalogue.get(print_id, japanese_only=True)
         if not card:
-            raise LookupError("That card print is no longer in the local catalogue.")
+            raise LookupError("That Japanese-market card print is no longer available for comparison.")
         result = await self.comparison.compare(card, refresh=refresh)
         return self._comparison_payload(result)
 
@@ -216,7 +216,7 @@ INDEX_HTML = """<!doctype html>
 </head>
 <body><main>
   <div class="eyebrow">Local card price comparison</div><h1>PriceCheck</h1>
-  <p class="intro">Search by English card name—even partially spelled—and choose the exact Japanese or English printing before checking stores.</p>
+  <p class="intro">Search by English card name—even partially spelled—and choose the exact Japanese-market printing before checking stores.</p>
   <form id="search-form"><input id="query" type="search" maxlength="120" autocomplete="off" placeholder="Try: Youthberk, Haughty Peerage FFR" autofocus><button id="search-button">Search</button></form>
   <div class="hint">Optional rarity at the end: <button type="button" data-query="Youthberk FFR">Youthberk FFR</button><button type="button" data-query="Chronojet">Chronojet</button></div>
   <div id="status" aria-live="polite"></div><div class="workspace"><section class="print-panel"><p class="panel-label">Matching printings</p><section id="results" class="result-list"></section></section><section class="price-panel"><p class="panel-label">Price comparison</p><section id="comparison"></section></section></div>
@@ -227,7 +227,7 @@ function setStatus(message, isError=false) { status.textContent = message; statu
 function clear(node) { node.replaceChildren(); }
 function text(tag, value, className) { const node=document.createElement(tag); node.textContent=value || ''; if (className) node.className=className; return node; }
 async function readJson(response) { const data=await response.json(); if (!response.ok) throw new Error(data.error || 'Something went wrong.'); return data; }
-async function search(raw) { const value=(raw || query.value).trim(); if (!value) { setStatus('Enter a card name to search.', true); return; } query.value=value; clear(results); clear(comparison); selectedId=null; setStatus('Finding matching prints…'); searchButton.disabled=true; try { const data=await readJson(await fetch('/api/search?q='+encodeURIComponent(value))); if (!data.cards.length) { setStatus('No local card print matched that name. Try a shorter spelling.'); return; } setStatus(data.cards.length+' matching print'+(data.cards.length===1?'':'s')+' — choose one to compare stores.'); for (const card of data.cards) { const button=document.createElement('button'); button.type='button'; button.className='card'; button.dataset.printId=card.id; const copy=document.createElement('div'); copy.append(text('h2',card.english_name), text('p',card.japanese_name || 'Official English print')); button.append(copy,text('div',card.display_code,'code')); button.addEventListener('click',()=>compare(card.id)); results.append(button); } } catch (error) { setStatus(error.message,true); } finally { searchButton.disabled=false; } }
+async function search(raw) { const value=(raw || query.value).trim(); if (!value) { setStatus('Enter a card name to search.', true); return; } query.value=value; clear(results); clear(comparison); selectedId=null; setStatus('Finding matching prints…'); searchButton.disabled=true; try { const data=await readJson(await fetch('/api/search?q='+encodeURIComponent(value))); if (!data.cards.length) { setStatus('No Japanese-market print matched that name. Try a shorter spelling.'); return; } setStatus(data.cards.length+' matching print'+(data.cards.length===1?'':'s')+' — choose one to compare stores.'); for (const card of data.cards) { const button=document.createElement('button'); button.type='button'; button.className='card'; button.dataset.printId=card.id; const copy=document.createElement('div'); copy.append(text('h2',card.english_name), text('p',card.japanese_name)); button.append(copy,text('div',card.display_code,'code')); button.addEventListener('click',()=>compare(card.id)); results.append(button); } } catch (error) { setStatus(error.message,true); } finally { searchButton.disabled=false; } }
 function safeLink(url) { try { const parsed=new URL(url); return ['https:','http:'].includes(parsed.protocol) ? parsed.href : null; } catch { return null; } }
 function highlightSelection() { document.querySelectorAll('.card[data-print-id]').forEach(card=>card.classList.toggle('active',Number(card.dataset.printId)===selectedId)); }
 function renderComparison(data) { highlightSelection(); clear(comparison); const head=document.createElement('div'); head.className='comparison-head'; const copy=document.createElement('div'); copy.append(text('h2',data.card.english_name),text('p',(data.card.japanese_name ? data.card.japanese_name+' · ' : '')+data.card.display_code)); const refresh=document.createElement('button'); refresh.textContent='Refresh prices'; refresh.addEventListener('click',()=>compare(data.card.id,true)); head.append(copy,refresh); comparison.append(head); if (!data.offers.length) comparison.append(text('p','No active store listing is available for this exact print right now.','notice')); for (const offer of data.offers) { const row=document.createElement('div'); row.className='offer'; const store=document.createElement(offer.listing_url ? 'a' : 'div'); store.textContent=offer.store_name; if (offer.listing_url) { const href=safeLink(offer.listing_url); if (href) { store.href=href; store.target='_blank'; store.rel='noopener noreferrer'; } } const detail=text('small',offer.raw_name); const storeWrap=document.createElement('div'); storeWrap.append(store,detail); const state=offer.availability==='sold_out' ? 'sold out' : offer.availability.replaceAll('_',' '); row.append(storeWrap,text('div',offer.price_display,offer.availability==='in_stock'?'price':'sold'),text('div',state+' · '+offer.match_confidence.replaceAll('_',' '),'tag')); comparison.append(row); } const notices=[]; if (data.no_active_listing_stores.length) notices.push('No active listing (sold out or not stocked): '+data.no_active_listing_stores.join(', ')); if (data.unavailable_stores.length) notices.push('Set not listed: '+data.unavailable_stores.join(', ')); if (data.failed_stores.length) notices.push('Could not check: '+data.failed_stores.join(', ')); if (notices.length) comparison.append(text('p',notices.join(' · '),'notice')); }

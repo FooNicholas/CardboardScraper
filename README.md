@@ -12,7 +12,8 @@ only after the user has chosen it.
 
 - Local FTS and fuzzy English-name search, including aliases and optional
   trailing rarity: `/price Youthberk FFR`.
-- An importable official English catalogue, including lazy-loaded result pages.
+- An importable official English catalogue, including lazy-loaded result pages,
+  retained as an English-name mapping source.
 - Concurrent exact-print comparison from Yuyu-Tei and BigWeb.
 - Per-store failures are isolated: one unavailable retailer does not prevent
   the other price from being returned.
@@ -76,6 +77,11 @@ It uses the same local database, natural-language search, and store comparison
 services as Telegram. It does not need a Telegram token and is bound to this
 computer only by default. You can run `scraperbot` in another terminal to use
 Telegram at the same time.
+
+For now, Telegram and the browser show only prints with a Japanese store-search
+name. The full English catalogue remains in the database to map English search
+names, but English-only printings are hidden because Yuyu-Tei does not stock
+them.
 
 ## Japanese-only and newly released cards
 
