@@ -80,15 +80,20 @@ deliberately excludes V-series and older formats:
 
 ```bash
 scraperbot-import-japanese --all
+scraperbot-link-official-japanese
+scraperbot-map-fandom --all
 ```
 
 The first command imports the official Japanese print master: Japanese name,
-set code, collector number, and the official card URL. The second reads the
-official English catalogue is then matched by exact printed reference to link
-names that exist in both languages. The third reads the trusted Cardfight!!
+set code, collector number, and the official card URL. The second matches the
+official English catalogue by exact printed reference to link names that exist
+in both languages. The third reads the trusted Cardfight!!
 Vanguard Wiki Fandom set page through its public API and applies its English
 names as `provisional` mappings. A base-card Fandom name is safely propagated
 to its parallel prints only when the official Japanese name is identical.
+The bulk Fandom command only visits sets with remaining unmapped Japanese
+prints; it keeps going if a page is unavailable and reports those sets for
+review.
 
 When Bushiroad later publishes an English print, the official-English importer
 always preserves that name rather than replacing it with a Fandom mapping.

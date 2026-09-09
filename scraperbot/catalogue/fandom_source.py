@@ -24,15 +24,22 @@ class FandomMappingSource:
     api_url = "https://cardfight.fandom.com/api.php"
     wiki_base_url = "https://cardfight.fandom.com/wiki/"
 
-    def __init__(self, client: httpx.AsyncClient | None = None, *, request_attempts: int = 3) -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient | None = None,
+        *,
+        request_attempts: int = 3,
+        page_delay: float = 0.25,
+    ) -> None:
         self.client = client
         self.request_attempts = request_attempts
+        self.page_delay = page_delay
 
     async def mappings_for_set(
         self, set_code: str, *, page_title: str | None = None
     ) -> tuple[str, list[EnglishNameMapping]]:
         wanted = normalise_set_code(set_code)
-        titles = [page_title] if page_title else await self._candidate_titles(set_code)
+        titles = [page_title] if page_title else await self._candidate_titles(self._search_term(set_code))
         best_title = ""
         best_mappings: list[EnglishNameMapping] = []
         for title in titles:
@@ -41,6 +48,8 @@ class FandomMappingSource:
             mappings = self.parse_mappings(await self._page_html(title), set_code, source_url=self._page_url(title))
             if len(mappings) > len(best_mappings):
                 best_title, best_mappings = title, mappings
+            if self.page_delay:
+                await asyncio.sleep(self.page_delay)
         if not best_mappings:
             raise OfficialSourceError(f"Fandom did not provide card mappings for {wanted}.")
         return best_title, best_mappings
@@ -56,6 +65,18 @@ class FandomMappingSource:
             }
         )
         return [str(row.get("title", "")) for row in payload.get("query", {}).get("search", [])]
+
+    @staticmethod
+    def _search_term(set_code: str) -> str:
+        """Restore the conventional hyphen before searching Fandom titles."""
+        compact = normalise_set_code(set_code)
+        matched = re.fullmatch(
+            r"(DZ|D)(TBP|TTD|LBT|LTD|MBX|BT|TB|SS|SD|TD|VS|PS|PV|PR)(\d+)?", compact
+        )
+        if not matched:
+            return compact
+        era, family, number = matched.groups()
+        return f"{era}-{family}{number or ''}"
 
     async def _page_html(self, title: str) -> str:
         payload = await self._get_json({"action": "parse", "page": title, "prop": "text", "format": "json"})

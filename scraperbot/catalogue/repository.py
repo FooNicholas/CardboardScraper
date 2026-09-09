@@ -391,6 +391,21 @@ class CatalogueRepository:
             ).fetchone()[0]
         )
 
+    def unmapped_japanese_set_codes(self) -> list[str]:
+        """Return Japanese set codes that still need an English-name source."""
+        return [
+            str(row[0])
+            for row in self.connection.execute(
+                """
+                SELECT DISTINCT j.set_code
+                FROM japanese_prints AS j
+                LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+                WHERE m.japanese_print_id IS NULL
+                ORDER BY j.set_code
+                """
+            )
+        ]
+
     def has_official_expansion(self, expansion_id: int) -> bool:
         """Whether a completed official import already wrote this expansion.
 

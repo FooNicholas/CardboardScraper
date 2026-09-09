@@ -15,3 +15,10 @@ def test_parse_fandom_card_table_to_provisional_mappings() -> None:
         ("FFR02", "FFR", "Exacerbate Dragon"),
     ]
     assert all(mapping.status == "provisional" for mapping in mappings)
+
+
+def test_fandom_search_term_restores_set_code_hyphens() -> None:
+    assert FandomMappingSource._search_term("DZBT16") == "DZ-BT16"
+    assert FandomMappingSource._search_term("DTTD04") == "D-TTD04"
+    assert FandomMappingSource._search_term("DPR") == "D-PR"
+    assert FandomMappingSource._search_term("PR") == "PR"

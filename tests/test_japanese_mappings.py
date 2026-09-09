@@ -125,6 +125,20 @@ def test_official_english_sync_has_precedence_over_a_fandom_name(tmp_path: Path)
         assert not catalogue.search("community name")
 
 
+def test_repository_lists_only_japanese_sets_with_missing_name_mappings(tmp_path: Path) -> None:
+    with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
+        catalogue.import_japanese_many(
+            [
+                JapaneseCardPrint("D-BT01", "001", "RRR", "Mapped", "https://official/001"),
+                JapaneseCardPrint("D-BT02", "001", "RRR", "Unmapped", "https://official/002"),
+            ]
+        )
+        catalogue.apply_name_mappings(
+            [EnglishNameMapping("D-BT01", "001", "RRR", "Mapped", "fandom", "https://fandom/1")]
+        )
+        assert catalogue.unmapped_japanese_set_codes() == ["DBT02"]
+
+
 def test_mapping_propagates_a_trusted_name_to_parallel_prints(tmp_path: Path) -> None:
     with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
         catalogue.import_japanese_many(
