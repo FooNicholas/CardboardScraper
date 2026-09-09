@@ -12,7 +12,10 @@ class FakeJapaneseSource:
         self.calls: list[int] = []
 
     async def list_expansions(self) -> list[OfficialExpansion]:
-        return [OfficialExpansion(10, "D-BT01", "Example Japanese set")]
+        return [
+            OfficialExpansion(190, "V-BT01", "Excluded V-series set"),
+            OfficialExpansion(201, "D-BT01", "Example Japanese set"),
+        ]
 
     async def expansions_for_sets(self, _set_codes: list[str]) -> list[OfficialExpansion]:
         return await self.list_expansions()
@@ -32,6 +35,6 @@ def test_full_japanese_import_resumes_by_product_checkpoint(tmp_path: Path) -> N
 
     assert asyncio.run(import_japanese_sets(database, [], all_sets=True, source=source)) == 1  # type: ignore[arg-type]
     assert asyncio.run(import_japanese_sets(database, [], all_sets=True, source=source)) == 0  # type: ignore[arg-type]
-    assert source.calls == [10]
+    assert source.calls == [201]
     with CatalogueRepository(database) as catalogue:
         assert catalogue.japanese_count == 1

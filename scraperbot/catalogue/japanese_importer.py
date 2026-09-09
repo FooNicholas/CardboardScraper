@@ -12,6 +12,16 @@ from scraperbot.catalogue.official_source import OfficialSourceError
 from scraperbot.catalogue.repository import CatalogueRepository
 
 
+def current_standard_expansions(expansions: list[OfficialExpansion]) -> list[OfficialExpansion]:
+    """Keep D/DZ-era product pages, excluding V-series and older formats.
+
+    Bushiroad's public catalogue gives D-SD01 the product id 201.  Newer
+    annual PR pages use their four-digit year as the id, so they remain in the
+    current Standard-format catalogue as well.
+    """
+    return [expansion for expansion in expansions if expansion.id >= 201]
+
+
 async def import_japanese_sets(
     database: Path,
     set_codes: list[str],
@@ -21,7 +31,11 @@ async def import_japanese_sets(
     source: OfficialJapaneseCardSource | None = None,
 ) -> int:
     source = source or OfficialJapaneseCardSource()
-    expansions = await source.list_expansions() if all_sets else await source.expansions_for_sets(set_codes)
+    expansions = (
+        current_standard_expansions(await source.list_expansions())
+        if all_sets
+        else await source.expansions_for_sets(set_codes)
+    )
     with CatalogueRepository(database) as catalogue:
         imported = 0
         for index, expansion in enumerate(expansions, start=1):
@@ -41,7 +55,9 @@ async def import_japanese_sets(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Import official Japanese Vanguard print data into the local master.")
     parser.add_argument("--set", dest="sets", action="append", default=[], help="Japanese set code, e.g. DZ-BT16")
-    parser.add_argument("--all", dest="all_sets", action="store_true", help="Import every listed Japanese product")
+    parser.add_argument(
+        "--all", dest="all_sets", action="store_true", help="Import all D/DZ-era Japanese Standard-format products"
+    )
     parser.add_argument("--list-sets", action="store_true", help="List official Japanese products and exit")
     parser.add_argument("--database", type=Path, default=Path("data/catalogue.sqlite3"))
     args = parser.parse_args()

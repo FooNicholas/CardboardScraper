@@ -73,8 +73,9 @@ scraperbot-import-japanese --set DZ-BT16
 scraperbot-map-fandom --set DZ-BT16
 ```
 
-To build the complete Japanese print master, including Japanese editions of
-English releases, use the resumable full import:
+To build the complete current-Standard Japanese print master, including
+Japanese editions of English releases, use the resumable D/DZ-era import. It
+deliberately excludes V-series and older formats:
 
 ```bash
 scraperbot-import-japanese --all
