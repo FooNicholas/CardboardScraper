@@ -72,8 +72,8 @@
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
 | Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official promo links are blocked and archived as internal English references. The local D-PR repair cleared 1,694 prior search records, archived 1,103 English references, and restored direct Fandom and exact Japanese-name matches. Energy, Energy Generator, and Quick Shield mappings are explicitly on hold. `D-PR/953` → Leuhan is covered by regression tests. |
 | Promo catalogue ingestion | Complete for current Yuyu-Tei scan | `scraperbot-import-yuyutei-promos --all` discovered every current numeric D-Promo group and stored 1,444 exact D-PR entries (numeric serials `1–1757`) from actual Yuyu-Tei listings. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. Empty range groups remain eligible for later refresh. |
-| Promo identity enrichment | In progress | The safe automatic D-PR repair is complete. 1,180 current D-PR prints still lack an unambiguous reviewed English name and require explicit Fandom evidence or a review decision before they enter user search. |
-| One-time translation review | Planned | Translate only unresolved playable or Energy names during import; persist the approved English search name and provenance locally. No user search may trigger a translation. |
+| Promo identity enrichment | Review workflow complete — content review pending | `scraperbot-promo-review export` creates a Yuyu-Tei-scoped JSON queue only for actually listed D-PR prints with no safe English mapping. The current queue has 953 playable entries; 81 Yuyu-Tei-listed utility entries are held. `apply` accepts only explicit approved entries and records their source URL. |
+| One-time translation review | Ready for reviewed input | Translate only unresolved playable names during review; enter the approved result and provenance through the local promo review file. Energy, Energy Generator, and Quick Shield remain held. No user search may trigger a translation. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
 | Multi-store promo lookup | In progress | Yuyu-Tei now uses the stored D-Promo range page for a selected D-PR serial and verifies its exact reference. Card Rush, VanHappy, and BigWeb still need explicit promo catalogue locations or serial-first lookup paths. |
 | Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
@@ -95,10 +95,11 @@
 4. **Complete:** a promo is mapped automatically only when its exact Japanese
    name has one verified English candidate. Energy, Energy Generator, and
    Quick Shield mappings are held pending a dedicated utility-card workflow.
-5. **Next:** put ambiguous, missing, or conflicting Japanese names into a review queue.
-   A one-time translation is allowed only for these entries; save the approved
-   English name, source, reviewer decision, and timestamp. Never overwrite a
-   reviewed mapping merely because another region reuses its serial number.
+5. **Complete:** export ambiguous, missing, or conflicting Japanese names into
+   a Yuyu-Tei-scoped review queue. A one-time translation is allowed only for
+   explicitly approved entries; save the English name and source. Energy,
+   Energy Generator, and Quick Shield records remain on hold. Never overwrite
+   a reviewed mapping merely because another region reuses its serial number.
 6. Add regression tests for corrected, rejected, and ambiguous D-PR mappings,
    including a Card Rush exact-print fixture for the reported product. The
    audit must pass before any bulk promo import writes user-searchable English
@@ -109,14 +110,14 @@
    can use the same print.
 8. **Complete:** `scraperbot-import-yuyutei-promos --page dpromo-1200` imports
    a specified page with an atomic completion checkpoint. It retains Energy
-   and playable entries without giving either an English mapping. **In
-   complete:** `--all` discovers and backfills the retailer's exposed numeric
+   and playable entries without giving either an English mapping. **Complete:**
+   `--all` discovers and backfills the retailer's exposed numeric
    D-Promo page groups, recording only pages that currently contain exact
    listings. The current Yuyu-Tei scan found 1,444 entries through numeric
    serial `1757`; it never assumes a range label means every serial exists.
-9. Enrich each promo with official Japanese data and explicit cross-print
-   evidence. Send only still-unresolved names to the one-time translation
-   review queue.
+9. **In progress:** enrich each actual Yuyu-Tei promo with official Japanese
+   data and explicit cross-print evidence. The 953 remaining playable entries
+   are ready for reviewed, one-time translations with provenance.
 10. **Complete:** Japanese serial normalisation and exact lookup work in the
    catalogue search API, Telegram handler, and browser UI. Formatted serials
    resolve directly; bare numbers are rejected as ambiguous. An unmapped

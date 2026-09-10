@@ -35,6 +35,7 @@ scraperbot-map-cross-prints = "scraperbot.catalogue.cross_print_importer:main"
 scraperbot-derive-japanese-names = "scraperbot.catalogue.japanese_name_deriver:main"
 scraperbot-repair-promo-mappings = "scraperbot.catalogue.promo_mapping_repair:main"
 scraperbot-import-yuyutei-promos = "scraperbot.catalogue.promo_catalogue_importer:main"
+scraperbot-promo-review = "scraperbot.catalogue.promo_review:main"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

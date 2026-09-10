@@ -635,16 +635,7 @@ class CatalogueRepository:
         ).fetchone()
         if not row:
             return None
-        return PromoCatalogueEntry(
-            store_id=row["store_id"],
-            page_slug=row["page_slug"],
-            set_code=row["set_code"],
-            collector_number=row["collector_number"],
-            japanese_name=row["japanese_name"],
-            listing_url=row["listing_url"],
-            source_page_url=row["source_page_url"],
-            product_id=row["product_id"],
-        )
+        return self._to_promo_entry(row)
 
     def promo_catalogue_page_url(
         self, store_id: str, set_code: str, collector_number: str
@@ -652,6 +643,21 @@ class CatalogueRepository:
         """Return the retailer page that contains one exact promo print."""
         entry = self.promo_catalogue_entry(store_id, set_code, collector_number)
         return entry.source_page_url if entry else None
+
+    def unmapped_yuyutei_promo_entries(self) -> list[PromoCatalogueEntry]:
+        """Return actual Yuyu-Tei D-PR listings lacking an English mapping."""
+        rows = self.connection.execute(
+            """
+            SELECT p.* FROM promo_catalogue_entries AS p
+            JOIN japanese_prints AS j
+              ON j.set_code = p.set_code AND j.collector_number = p.collector_number
+            LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+            WHERE p.store_id = 'yuyutei' AND p.set_code = 'DPR'
+              AND m.japanese_print_id IS NULL
+            ORDER BY CAST(p.collector_number AS INTEGER), p.collector_number
+            """
+        ).fetchall()
+        return [self._to_promo_entry(row) for row in rows]
 
     def unambiguous_fandom_name_mappings(self, set_codes: Iterable[str]) -> list[EnglishNameMapping]:
         """Map selected prints from one exact Japanese-name Fandom candidate.
@@ -1167,6 +1173,19 @@ class CatalogueRepository:
     @staticmethod
     def _compact_reference_part(value: str) -> str:
         return re.sub(r"[^A-Za-z0-9]", "", value).upper()
+
+    @staticmethod
+    def _to_promo_entry(row: sqlite3.Row) -> PromoCatalogueEntry:
+        return PromoCatalogueEntry(
+            store_id=row["store_id"],
+            page_slug=row["page_slug"],
+            set_code=row["set_code"],
+            collector_number=row["collector_number"],
+            japanese_name=row["japanese_name"],
+            listing_url=row["listing_url"],
+            source_page_url=row["source_page_url"],
+            product_id=row["product_id"],
+        )
 
     def _upsert_japanese(self, card: JapaneseCardPrint) -> sqlite3.Row:
         if not card.japanese_name:

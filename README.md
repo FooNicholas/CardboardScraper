@@ -189,6 +189,26 @@ and never needs an English mapping: an unmapped Japanese print can still be
 selected for exact-print price comparison. Bare numbers remain unsupported to
 avoid ambiguity across product families.
 
+### Promo name review queue
+
+Export only Yuyu-Tei-listed D-PR prints that still lack a safe English mapping:
+
+```sh
+scraperbot-promo-review export data/dpr-promo-name-review.json
+```
+
+Review the JSON locally. Set an entry's `status` to `approved`, fill in its
+English name, optional aliases, and (when available) the Fandom source URL.
+Then apply it with:
+
+```sh
+scraperbot-promo-review apply data/dpr-promo-name-review.json
+```
+
+Only approved records that match a stored Yuyu-Tei D-PR entry are imported.
+Energy, Energy Generator, and Quick Shield entries are pre-marked `held` and
+remain unmapped until that work resumes.
+
 When Bushiroad later publishes an English print, the official-English importer
 always preserves that name rather than replacing it with a Fandom mapping.
 There is still no translation request in the Telegram price path.
