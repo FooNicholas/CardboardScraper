@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -17,11 +18,18 @@ class YuyuTeiConnector(StoreConnector):
     store_name = "Yuyu-Tei"
     base_url = "https://yuyu-tei.jp"
 
-    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient | None = None,
+        *,
+        promo_page_url: Callable[[CardPrint], str | None] | None = None,
+    ) -> None:
         self.client = client
+        self.promo_page_url = promo_page_url
 
     async def search(self, card: CardPrint) -> list[StoreOffer]:
-        url = f"{self.base_url}/sell/vg/s/{card.set_code.lower()}"
+        known_promo_page = self.promo_page_url(card) if self.promo_page_url and card.set_code == "DPR" else None
+        url = known_promo_page or f"{self.base_url}/sell/vg/s/{card.set_code.lower()}"
         headers = {"User-Agent": "ScraperBot/0.1 (+personal price comparison)"}
         if self.client:
             response = await self.client.get(url, headers=headers)

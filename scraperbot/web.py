@@ -171,9 +171,15 @@ class LocalWebRequestHandler(BaseHTTPRequestHandler):
 def build_web_application(settings: Settings | None = None) -> LocalPriceCheckWeb:
     """Create the shared catalogue/store services without requiring Telegram."""
     settings = settings or Settings.from_environment()
+    catalogue = CatalogueRepository(settings.catalogue_db)
+    yuyutei = YuyuTeiConnector(
+        promo_page_url=lambda card: catalogue.promo_catalogue_page_url(
+            "yuyutei", card.set_code, card.collector_number
+        )
+    )
     return LocalPriceCheckWeb(
-        CatalogueRepository(settings.catalogue_db),
-        ComparisonService((YuyuTeiConnector(), BigWebConnector(), CardRushConnector(), VanHappyConnector())),
+        catalogue,
+        ComparisonService((yuyutei, BigWebConnector(), CardRushConnector(), VanHappyConnector())),
     )
 
 

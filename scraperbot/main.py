@@ -19,9 +19,14 @@ def build_application(settings: Settings | None = None) -> Application:
     """Assemble the local polling application without making network calls."""
     settings = settings or Settings.from_environment()
     catalogue = CatalogueRepository(settings.catalogue_db)
+    yuyutei = YuyuTeiConnector(
+        promo_page_url=lambda card: catalogue.promo_catalogue_page_url(
+            "yuyutei", card.set_code, card.collector_number
+        )
+    )
     bot = TelegramPriceBot(
         catalogue,
-        ComparisonService((YuyuTeiConnector(), BigWebConnector(), CardRushConnector(), VanHappyConnector())),
+        ComparisonService((yuyutei, BigWebConnector(), CardRushConnector(), VanHappyConnector())),
     )
     application = ApplicationBuilder().token(settings.require_bot_token()).build()
     for handler in bot.handlers():

@@ -72,6 +72,41 @@ def test_yuyutei_matches_print_reference_without_translating() -> None:
     assert offers[0].listing_url == "https://yuyu-tei.jp/sell/vg/card/dzbt16/999"
 
 
+def test_yuyutei_uses_the_saved_promo_page_for_dpr_prints() -> None:
+    card = CardPrint(
+        set_code="D-PR",
+        collector_number="953",
+        rarity="PR",
+        english_name="Leuhan",
+        japanese_name="大地を駆ける守主 ルアン",
+        source="test",
+    )
+    requested_urls: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested_urls.append(str(request.url))
+        return httpx.Response(
+            200,
+            text="""
+            <div class=\"col-md\"><span>D-PR/953</span><h4>大地を駆ける守主 ルアン</h4>
+            <strong>420 円</strong><label class=\"cart_sell_zaiko\">在庫 : ◯</label></div>
+            """,
+        )
+
+    async def run() -> list[object]:
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await YuyuTeiConnector(
+                client,
+                promo_page_url=lambda _: "https://yuyu-tei.jp/sell/vg/s/dpromo-1000",
+            ).search(card)
+
+    offers = asyncio.run(run())
+    assert requested_urls == ["https://yuyu-tei.jp/sell/vg/s/dpromo-1000"]
+    assert len(offers) == 1
+    assert offers[0].price_yen == 420
+
+
 def test_yuyutei_marks_an_explicit_zero_stock_listing_sold_out() -> None:
     html = """
     <div class="col-md"><span>DZ-BT16/FFR02</span><h4>エグザサベイト・ドラゴン</h4>
@@ -194,3 +229,6 @@ def test_vanhappy_matches_exact_prints_and_reports_stock_and_sold_out_prices() -
         (280, Availability.SOLD_OUT, 0),
     ]
     assert offers[0].listing_url == "https://www.van-happy.com/view/item/28712"
+import asyncio
+
+import httpx

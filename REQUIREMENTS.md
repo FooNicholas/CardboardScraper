@@ -71,11 +71,11 @@
 | Core catalogue and comparison | Complete | English fuzzy search, Japanese-print selection, local browser and Telegram interfaces, and exact-print comparisons from Yuyu-Tei, BigWeb, Card Rush, and VanHappy. |
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
 | Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official promo links are blocked and archived as internal English references. The local D-PR repair cleared 1,694 prior search records, archived 1,103 English references, and restored direct Fandom and exact Japanese-name matches. Energy, Energy Generator, and Quick Shield mappings are explicitly on hold. `D-PR/953` → Leuhan is covered by regression tests. |
-| Promo catalogue ingestion | Initial importer complete — backfill pending | `scraperbot-import-yuyutei-promos --page dpromo-1200` reads a named Yuyu-Tei D-Promo page into a checkpointed local store keyed by Japanese serial. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. |
+| Promo catalogue ingestion | Complete for current Yuyu-Tei scan | `scraperbot-import-yuyutei-promos --all` discovered every current numeric D-Promo group and stored 1,444 exact D-PR entries (numeric serials `1–1757`) from actual Yuyu-Tei listings. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. Empty range groups remain eligible for later refresh. |
 | Promo identity enrichment | In progress | The safe automatic D-PR repair is complete. 1,180 current D-PR prints still lack an unambiguous reviewed English name and require explicit Fandom evidence or a review decision before they enter user search. |
 | One-time translation review | Planned | Translate only unresolved playable or Energy names during import; persist the approved English search name and provenance locally. No user search may trigger a translation. |
 | Serial-number search | Planned | Add Japanese-print serial normalisation, exact reference lookup, ambiguity handling for bare numbers, and Japanese serial result labels. English serials remain internal mapping data only. |
-| Multi-store promo lookup | Planned | Pass the selected canonical serial to every connector, use each store's catalogue location when needed, and verify the exact reference before showing an offer. |
+| Multi-store promo lookup | In progress | Yuyu-Tei now uses the stored D-Promo range page for a selected D-PR serial and verifies its exact reference. Card Rush, VanHappy, and BigWeb still need explicit promo catalogue locations or serial-first lookup paths. |
 | Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
 | Dorasuta | Deferred | Do not add the Dorasuta connector at this time. |
 
@@ -109,8 +109,11 @@
    can use the same print.
 8. **Complete:** `scraperbot-import-yuyutei-promos --page dpromo-1200` imports
    a specified page with an atomic completion checkpoint. It retains Energy
-   and playable entries without giving either an English mapping. **Next:**
-   backfill the remaining D-Promo pages and record each completed range.
+   and playable entries without giving either an English mapping. **In
+   complete:** `--all` discovers and backfills the retailer's exposed numeric
+   D-Promo page groups, recording only pages that currently contain exact
+   listings. The current Yuyu-Tei scan found 1,444 entries through numeric
+   serial `1757`; it never assumes a range label means every serial exists.
 9. Enrich each promo with official Japanese data and explicit cross-print
    evidence. Send only still-unresolved names to the one-time translation
    review queue.
@@ -118,9 +121,10 @@
    API, the Telegram handler, and the browser UI. Formatted serials resolve
    directly; ambiguous bare numbers prompt for a set family. English serials
    are used only by the import/mapping layer and never appear in user results.
-11. Add connector metadata for retailer-specific promo locations. Yuyu-Tei may
-   require a page such as `dpromo-1200`; Card Rush, VanHappy, BigWeb, and later
-   stores still receive the same canonical `D-PR/1247` reference.
+11. **In progress:** Yuyu-Tei reads the exact saved range page for a selected
+   promo print. Add equivalent catalogue-location or serial-first metadata for
+   Card Rush, VanHappy, BigWeb, and later stores; they still receive the same
+   canonical `D-PR/1247` reference.
 12. Backfill promo ranges incrementally, verify exact-print offers and stock
    indicators against live listings, then mark each range complete in the
    import checkpoint.

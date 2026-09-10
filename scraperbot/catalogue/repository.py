@@ -645,6 +645,13 @@ class CatalogueRepository:
             product_id=row["product_id"],
         )
 
+    def promo_catalogue_page_url(
+        self, store_id: str, set_code: str, collector_number: str
+    ) -> str | None:
+        """Return the retailer page that contains one exact promo print."""
+        entry = self.promo_catalogue_entry(store_id, set_code, collector_number)
+        return entry.source_page_url if entry else None
+
     def unambiguous_fandom_name_mappings(self, set_codes: Iterable[str]) -> list[EnglishNameMapping]:
         """Map selected prints from one exact Japanese-name Fandom candidate.
 

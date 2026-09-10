@@ -21,7 +21,7 @@ class YuyuTeiPromoCatalogueSource:
 
     store_id = "yuyutei"
     base_url = "https://yuyu-tei.jp"
-    _page_slug_pattern = re.compile(r"dpromo-[a-z0-9-]+\Z")
+    _page_slug_pattern = re.compile(r"dpromo-\d+\Z")
 
     def __init__(
         self,
@@ -40,10 +40,24 @@ class YuyuTeiPromoCatalogueSource:
 
     async def entries_for_page(self, page_slug: str) -> list[PromoCatalogueEntry]:
         page_url = self.page_url(page_slug)
-        entries = self.parse_entries(page_slug, page_url, await self._get_text(page_url))
-        if not entries:
-            raise PromoCatalogueSourceError(f"Yuyu-Tei page {page_slug!r} did not contain D-Promo listings.")
-        return entries
+        return self.parse_entries(page_slug, page_url, await self._get_text(page_url))
+
+    async def list_page_slugs(self) -> list[str]:
+        """Discover D-Promo navigation groups currently exposed by Yuyu-Tei."""
+        # Any current D-Promo page contains the retailer's full product-range
+        # selector. Keep this one stable page as the discovery seed.
+        return self.parse_page_slugs(await self._get_text(self.page_url("dpromo-1200")))
+
+    @classmethod
+    def parse_page_slugs(cls, html: str) -> list[str]:
+        """Extract only numeric D-Promo range controls from a catalogue page."""
+        soup = BeautifulSoup(html, "lxml")
+        page_slugs = {
+            input_node["value"].strip().lower()
+            for input_node in soup.select('input[name="vers[]"][value]')
+            if cls._page_slug_pattern.fullmatch(input_node["value"].strip().lower())
+        }
+        return sorted(page_slugs, key=lambda slug: int(slug.removeprefix("dpromo-")))
 
     @classmethod
     def parse_entries(

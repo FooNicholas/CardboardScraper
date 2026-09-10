@@ -20,6 +20,14 @@ PROMO_PAGE = """
 </div></div>
 """
 
+PROMO_PAGE_CONTROLS = """
+<input type="checkbox" name="vers[]" value="dpromo-1800">
+<input type="checkbox" name="vers[]" value="dpromo-100">
+<input type="checkbox" name="vers[]" value="dpromo-1200">
+<input type="checkbox" name="vers[]" value="promo-100">
+<input type="checkbox" name="vers[]" value="dpromo-other">
+"""
+
 
 def test_yuyutei_promo_parser_extracts_exact_dpr_entries() -> None:
     source = YuyuTeiPromoCatalogueSource()
@@ -38,3 +46,11 @@ def test_yuyutei_promo_parser_extracts_exact_dpr_entries() -> None:
 def test_yuyutei_promo_page_slug_is_constrained() -> None:
     with pytest.raises(ValueError):
         YuyuTeiPromoCatalogueSource().page_url("https://example.test/not-a-promo-page")
+
+
+def test_yuyutei_promo_page_discovery_uses_only_numeric_dpromo_controls() -> None:
+    assert YuyuTeiPromoCatalogueSource.parse_page_slugs(PROMO_PAGE_CONTROLS) == [
+        "dpromo-100",
+        "dpromo-1200",
+        "dpromo-1800",
+    ]

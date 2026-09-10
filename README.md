@@ -170,6 +170,17 @@ listings need to be checked again. It records the canonical Japanese serial,
 Japanese name, page slug, retailer product ID, and product URL without adding
 or changing an English search mapping.
 
+To discover every D-Promo navigation group currently exposed by Yuyu-Tei and
+import only the exact promo entries it actually lists, run:
+
+```sh
+scraperbot-import-yuyutei-promos --all
+```
+
+The retailer's range labels are not treated as proof that every serial in the
+range exists. Empty groups stay uncheckpointed so a later run can pick up new
+listings.
+
 When Bushiroad later publishes an English print, the official-English importer
 always preserves that name rather than replacing it with a Fandom mapping.
 There is still no translation request in the Telegram price path.
