@@ -47,20 +47,33 @@ class YuyuTeiConnector(StoreConnector):
                 continue
             card_link = item.select_one("a[href*='/sell/vg/card/']")
             stock_match = re.search(r"在庫\s*[:：]\s*(\d+)", item_text)
+            stock_label = item.select_one(".cart_sell_zaiko")
+            stock_label_text = stock_label.get_text(" ", strip=True) if stock_label else item_text
             price = price_from_text(price_element.get_text(" ", strip=True))
             if stock_match:
                 availability = Availability.SOLD_OUT if int(stock_match.group(1)) == 0 else Availability.IN_STOCK
+            elif "◯" in stock_label_text or "○" in stock_label_text:
+                # Current sell pages use a circle rather than a numeric stock
+                # count. It means the card can be added to the cart.
+                availability = Availability.IN_STOCK
             elif any(marker in item_text for marker in ("在庫なし", "売り切れ", "SOLD OUT")):
                 availability = Availability.SOLD_OUT
             else:
                 availability = Availability.UNKNOWN
+            if availability == Availability.SOLD_OUT:
+                price = None
+                price_display = "Sold out"
+            elif price is not None:
+                price_display = f"¥{price:,}"
+            else:
+                price_display = "Price unavailable"
             offers.append(
                 StoreOffer(
                     store_id=cls.store_id,
                     store_name=cls.store_name,
                     raw_name=name_heading.get_text(" ", strip=True),
-                    price_yen=price if availability != Availability.SOLD_OUT else None,
-                    price_display=f"¥{price:,}" if price is not None and availability == Availability.IN_STOCK else "Sold out",
+                    price_yen=price,
+                    price_display=price_display,
                     availability=availability,
                     listing_url=urljoin(cls.base_url, card_link["href"]) if card_link else None,
                     match_confidence=MatchConfidence.EXACT_PRINT,

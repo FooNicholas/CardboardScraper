@@ -68,3 +68,25 @@ def test_yuyutei_marks_an_explicit_zero_stock_listing_sold_out() -> None:
     assert offer.availability == Availability.SOLD_OUT
     assert offer.price_display == "Sold out"
     assert offer.price_yen is None
+
+
+def test_yuyutei_marks_a_circle_stock_indicator_in_stock() -> None:
+    html = """
+    <div class="col-md"><span>DZ-BT16/FFR02</span><h4>エグザサベイト・ドラゴン</h4>
+    <strong>420 円</strong><label class="cart_sell_zaiko">在庫 : ◯</label></div>
+    """
+    offer = YuyuTeiConnector.parse_html(CARD, html)[0]
+    assert offer.availability == Availability.IN_STOCK
+    assert offer.price_yen == 420
+    assert offer.price_display == "¥420"
+
+
+def test_yuyutei_does_not_label_an_unknown_stock_state_sold_out() -> None:
+    html = """
+    <div class="col-md"><span>DZ-BT16/FFR02</span><h4>エグザサベイト・ドラゴン</h4>
+    <strong>420 円</strong></div>
+    """
+    offer = YuyuTeiConnector.parse_html(CARD, html)[0]
+    assert offer.availability == Availability.UNKNOWN
+    assert offer.price_yen == 420
+    assert offer.price_display == "¥420"
