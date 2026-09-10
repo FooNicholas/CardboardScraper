@@ -14,7 +14,9 @@ only after the user has chosen it.
   trailing rarity: `/price Youthberk FFR`.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as an English-name mapping source.
-- Concurrent exact-print comparison from Yuyu-Tei and BigWeb.
+- Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and
+  VanHappy. Card Rush and VanHappy use the retailers' Japanese card-name
+  search and only retain results with an exact printed reference.
 - Per-store failures are isolated: one unavailable retailer does not prevent
   the other price from being returned.
 - A local Telegram long-polling runner. Deployment/webhook hosting is

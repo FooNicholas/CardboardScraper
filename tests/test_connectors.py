@@ -1,4 +1,6 @@
 from scraperbot.connectors.bigweb import BigWebConnector
+from scraperbot.connectors.cardrush import CardRushConnector
+from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
 from scraperbot.models import Availability, CardPrint
 
@@ -9,6 +11,15 @@ CARD = CardPrint(
     rarity="FFR",
     english_name="Exzabite Dragon",
     japanese_name="エグザサベイト・ドラゴン",
+    source="test",
+)
+
+DRAEGFORCE = CardPrint(
+    set_code="DZBT14",
+    collector_number="001",
+    rarity="RRR",
+    english_name='Youthberk "Drægforce Arms: Fantôme"',
+    japanese_name="ユースベルク“龍吼燎騎・幻影”",
     source="test",
 )
 
@@ -127,3 +138,59 @@ def test_bigweb_keeps_the_displayed_price_for_an_out_of_stock_print() -> None:
     assert offers[0].price_yen == 980
     assert offers[0].price_display == "¥980"
     assert offers[0].stock_count == 0
+
+
+def test_cardrush_matches_exact_prints_and_retains_condition_stock_and_oos_price() -> None:
+    html = """
+    <ul>
+      <li><a href="/product/53085"><p>ユースベルク龍吼燎騎・幻影【RRR】{DZ-BT14/001}</p>
+      <p>380円（税込）</p><p>在庫数 48枚</p></a></li>
+      <li><a href="/product/53488"><p>〔状態A-〕ユースベルク龍吼燎騎・幻影【RRR】{DZ-BT14/001}</p>
+      <p>350円（税込）</p><p>在庫数 6枚</p></a></li>
+      <li><a href="/product/54724"><p>〔状態B〕ユースベルク龍吼燎騎・幻影【RRR】{DZ-BT14/001}</p>
+      <p>280円（税込）</p><p>×</p></a></li>
+      <li><a href="/product/53262"><p>ユースベルク龍吼燎騎・幻影【FFR】{DZ-BT14/FFR01}</p>
+      <p>3,980円（税込）</p><p>在庫数 2枚</p></a></li>
+    </ul>
+    """
+    offers = CardRushConnector.parse_html(DRAEGFORCE, html)
+    assert [(offer.price_yen, offer.availability, offer.stock_count, offer.condition) for offer in offers] == [
+        (380, Availability.IN_STOCK, 48, None),
+        (350, Availability.IN_STOCK, 6, "A-"),
+        (280, Availability.SOLD_OUT, None, "B"),
+    ]
+    assert offers[0].listing_url == "https://www.cardrush-vanguard.jp/product/53085"
+
+
+def test_vanhappy_matches_exact_prints_and_reports_stock_and_sold_out_prices() -> None:
+    html = """
+    <div class="product-card">
+      <p class="product-card__name"><a href="/view/item/28712">ユースベルク“龍吼燎騎・幻影”「RRR」[DZ-BT14/001]《ドラゴンエンパイア》</a></p>
+      <div class="product-card__price"><span>￥320</span></div><div class="product-card__stock">在庫 23 個</div>
+      <button>カートに入れる</button>
+    </div>
+    <div class="product-card">
+      <div class="product-card__badges"><span class="product-card__badge--soldout">SOLD OUT</span></div>
+      <p class="product-card__name"><a href="/view/item/28713">ユースベルク“龍吼燎騎・幻影”「RRR」[DZ-BT14/001]《ドラゴンエンパイア》</a></p>
+      <div class="product-card__price"><span>￥280</span></div><div class="product-card__stock">在庫 0 個</div>
+      <button disabled>売り切れ</button>
+    </div>
+    <div class="product-card">
+      <div class="product-card__badges"><span class="product-card__badge--soldout">SOLD OUT</span></div>
+      <p class="product-card__name"><a href="/view/item/28889">ユースベルク“龍吼燎騎・幻影”「FFR」[DZ-BT14/FFR01]《ドラゴンエンパイア》</a></p>
+      <div class="product-card__price"><span>￥3,980</span></div><div class="product-card__stock">在庫 0 個</div>
+      <button disabled>売り切れ</button>
+    </div>
+    <div class="product-card">
+      <div class="product-card__badges"><span class="product-card__badge--soldout">SOLD OUT</span></div>
+      <p class="product-card__name"><a href="/view/item/28995">ユースベルク“龍吼燎騎・幻影”「SR」[DZ-BT14/SR01]《ドラゴンエンパイア》</a></p>
+      <div class="product-card__price"><span>￥920</span></div><div class="product-card__stock">在庫 0 個</div>
+      <button disabled>売り切れ</button>
+    </div>
+    """
+    offers = VanHappyConnector.parse_html(DRAEGFORCE, html)
+    assert [(offer.price_yen, offer.availability, offer.stock_count) for offer in offers] == [
+        (320, Availability.IN_STOCK, 23),
+        (280, Availability.SOLD_OUT, 0),
+    ]
+    assert offers[0].listing_url == "https://www.van-happy.com/view/item/28712"

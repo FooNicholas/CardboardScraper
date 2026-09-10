@@ -21,6 +21,7 @@ def format_comparison(result: ComparisonResult) -> str:
     if result.offers:
         for offer in result.offers:
             store = escape(offer.store_name)
+            condition = f" ({escape(offer.condition)})" if offer.condition else ""
             price = escape(offer.price_display)
             if offer.stock_count is not None:
                 availability = f" — {offer.stock_count} left"
@@ -31,9 +32,11 @@ def format_comparison(result: ComparisonResult) -> str:
             else:
                 availability = ""
             if offer.listing_url:
-                lines.append(f'<a href="{escape(offer.listing_url, quote=True)}">{store}</a>: {price}{availability}')
+                lines.append(
+                    f'<a href="{escape(offer.listing_url, quote=True)}">{store}</a>{condition}: {price}{availability}'
+                )
             else:
-                lines.append(f"{store}: {price}{availability}")
+                lines.append(f"{store}{condition}: {price}{availability}")
     else:
         lines.append("No matching offers found.")
     if result.no_active_listing_stores:
