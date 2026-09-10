@@ -4,7 +4,13 @@ from pathlib import Path
 from scraperbot.catalogue.japanese_source import OfficialJapaneseCardSource
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
-from scraperbot.models import CardPrint, EnglishNameMapping, Finish, JapaneseCardPrint
+from scraperbot.models import (
+    CardPrint,
+    EnglishNameMapping,
+    Finish,
+    JapaneseCardPrint,
+    PromoCatalogueEntry,
+)
 
 
 def test_official_japanese_source_splits_a_holo_suffix_from_the_card_name() -> None:
@@ -80,6 +86,56 @@ def test_yuyutei_excludes_a_declared_standard_listing_for_a_holo_print() -> None
     assert offers[0].price_yen == 500
     assert offers[0].finish is Finish.HOLO
     assert offers[0].finish_raw == "H仕様"
+
+
+def test_yuyutei_promo_holo_label_enriches_its_exact_serial(tmp_path: Path) -> None:
+    database = tmp_path / "catalogue.sqlite3"
+    with CatalogueRepository(database) as catalogue:
+        catalogue.import_japanese_many(
+            [
+                JapaneseCardPrint(
+                    "D-PR",
+                    "999",
+                    "PR",
+                    "焔の巫女 シンディ",
+                    "https://official.test/999",
+                )
+            ]
+        )
+        catalogue.apply_name_mappings(
+            [
+                EnglishNameMapping(
+                    "D-PR",
+                    "999",
+                    "PR",
+                    "Blaze Maiden, Cindy",
+                    "fandom",
+                    "https://fandom.test/cindy",
+                )
+            ]
+        )
+
+        catalogue.upsert_promo_catalogue_entries(
+            [
+                PromoCatalogueEntry(
+                    "yuyutei",
+                    "dpromo-900",
+                    "D-PR",
+                    "999",
+                    "焔の巫女 シンディ(H仕様)",
+                    "https://yuyu.test/999",
+                    "https://yuyu.test/dpromo-900",
+                    "10042",
+                )
+            ]
+        )
+        card = catalogue.search("cindy", japanese_only=True)[0]
+
+    assert card.set_code == "DPR"
+    assert card.collector_number == "999"
+    assert card.finish is Finish.HOLO
+    assert card.finish_raw == "H仕様"
+    assert card.display_code == "DPR/999 · PR · H仕様"
 
 
 def test_existing_catalogue_schema_migrates_finish_columns(tmp_path: Path) -> None:

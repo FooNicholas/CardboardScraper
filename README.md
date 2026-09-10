@@ -17,15 +17,17 @@ only after the user has chosen it.
 - Local FTS and fuzzy English-name search, including aliases and optional
   trailing rarity: `/price Youthberk FFR`.
 - Explicitly labelled print finishes are kept separate from rarity. For
-  example, `H仕様` is recorded as a holo finish while preserving the original
-  Japanese label for display and exact-listing checks.
+  example, a Yuyu-Tei D-PR title ending in `H仕様` is recorded against that
+  exact Japanese serial as a holo finish, while preserving the original label
+  for display and exact-listing checks.
 - Filter a search with browser controls, or in Telegram/API text with
   `rarity:FFR,SEC` and `finish:holo`. A finish filter intentionally retains
   prints whose finish is not yet labelled rather than guessing they are
   standard.
-- After comparing one print, choose “Lowest across printings” to aggregate
-  exact store offers for its verified Japanese reprints. Offers remain labelled
-  with their own print code, rarity, finish, stock, and availability.
+- When a search resolves to one verified Japanese reprint family, use the
+  far-right “Lowest across printings” button in the filter bar to compare all
+  of them immediately—no individual print selection required. Offers remain
+  labelled with their own print code, rarity, finish, stock, and availability.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as an English-name mapping source.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and

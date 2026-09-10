@@ -17,6 +17,7 @@ from scraperbot.models import (
     Finish,
     JapaneseCardPrint,
     PromoCatalogueEntry,
+    finish_from_text,
     normalise_collector_number,
     normalise_finish,
     normalise_set_code,
@@ -618,6 +619,23 @@ class CatalogueRepository:
                         entry.product_id,
                     ),
                 )
+                if entry.store_id == "yuyutei":
+                    finish, finish_raw = finish_from_text(entry.japanese_name)
+                    if finish is not Finish.UNKNOWN:
+                        for table in ("japanese_prints", "card_prints"):
+                            self.connection.execute(
+                                f"""
+                                UPDATE {table}
+                                SET finish = ?, finish_raw = ?, imported_at = CURRENT_TIMESTAMP
+                                WHERE set_code = ? AND collector_number = ?
+                                """,
+                                (
+                                    finish.value,
+                                    finish_raw,
+                                    entry.set_code,
+                                    entry.collector_number,
+                                ),
+                            )
                 imported += 1
         except Exception:
             self.connection.rollback()

@@ -87,9 +87,9 @@
 | Promo identity enrichment | Review workflow complete — content review pending | `scraperbot-promo-review export` creates a Yuyu-Tei-scoped JSON queue only for actually listed D-PR prints with no safe English mapping. The current queue has 953 playable entries; 81 Yuyu-Tei-listed utility entries are held. `apply` accepts only explicit approved entries and records their source URL. |
 | One-time translation review | Ready for reviewed input | Translate only unresolved playable names during review; enter the approved result and provenance through the local promo review file. Energy, Energy Generator, and Quick Shield remain held. No user search may trigger a translation. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
-| Finish / holo metadata | Implemented | Canonical Japanese prints and store offers retain raw finish text plus a normalised holo/standard/unknown value. Official `H仕様` suffixes are stored as holo, and an explicitly conflicting retailer finish is excluded from an exact-print comparison. |
+| Finish / holo metadata | Implemented | Canonical Japanese prints and store offers retain raw finish text plus a normalised holo/standard/unknown value. A Yuyu-Tei D-PR title marked `H仕様` enriches that exact Japanese serial's local print record as holo and is displayed in search results; an explicitly conflicting retailer finish is excluded from an exact-print comparison. |
 | Rarity and finish filters | Implemented | The browser offers multi-select rarity and finish controls; Telegram and the search API accept `rarity:FFR,SEC` and `finish:holo`. The trailing-rarity shortcut remains supported. Unknown-finish printings stay visible when filtering by holo or standard. |
-| Lowest-price all-printings comparison | Implemented | After an exact-print comparison, browser and Telegram offer a verified-reprints view. Each printing is queried through the same exact-reference connectors; in-stock offers sort by price, and every row retains its exact print, finish, stock, and availability. Families require an exact Japanese name plus exact normalised mapped English name—never fuzzy similarity. |
+| Lowest-price all-printings comparison | Implemented | The browser places an immediate, far-right filter-bar action when the current results are one verified reprint family, so no individual print must be selected first; Telegram offers the action after its exact-print selection. Each printing is queried through the same exact-reference connectors; in-stock offers sort by price, and every row retains its exact print, finish, stock, and availability. Families require an exact Japanese name plus exact normalised mapped English name—never fuzzy similarity. |
 | Multi-store promo lookup | In progress | Yuyu-Tei now uses the stored D-Promo range page for a selected D-PR serial and verifies its exact reference. Card Rush, VanHappy, and BigWeb still need explicit promo catalogue locations or serial-first lookup paths. |
 | Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
 | Dorasuta | Deferred | Do not add the Dorasuta connector at this time. |
@@ -168,7 +168,9 @@
    connectors; priced in-stock offers sort ascending while every row keeps its
    print, rarity, finish, availability, and stock.
 6. **Complete:** add browser and Telegram presentation for the aggregate
-   view, while preserving the selected-print comparison as the default.
+   view. In the browser, a single-family result list exposes the action at the
+   far right of its filter bar without requiring an exact-print selection;
+   selected-print comparison otherwise remains the default.
 
 ### Explicit non-goals for this work
 

@@ -57,6 +57,7 @@ def test_local_web_search_and_comparison_share_the_catalogue(tmp_path: Path) -> 
                 "finish_raw": "H仕様",
                 "display_code": "DZBT16/FFR02 · FFR · H仕様",
                 "source": "test",
+                "family_print_count": 1,
             }
         ]
         assert search["rarities"] == ["FFR"]
@@ -128,8 +129,10 @@ def test_local_web_compares_the_lowest_price_across_verified_reprints(tmp_path: 
         )
         app = LocalPriceCheckWeb(catalogue, ComparisonService([FixedConnector()]))
 
+        search = app.search("example card")
         family = asyncio.run(app.compare_family(first.id or 0))
 
+    assert {card["family_print_count"] for card in search["cards"]} == {2}
     assert family["print_count"] == 2
     assert len(family["offers"]) == 2
     assert {offer["card"]["collector_number"] for offer in family["offers"]} == {"001", "002"}
