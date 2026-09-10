@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS card_prints (
     set_code TEXT NOT NULL,
     collector_number TEXT NOT NULL,
     rarity TEXT NOT NULL,
+    finish TEXT NOT NULL DEFAULT 'unknown',
+    finish_raw TEXT,
     english_name TEXT NOT NULL,
     japanese_name TEXT,
     aliases_json TEXT NOT NULL DEFAULT '[]',
@@ -80,6 +82,8 @@ CREATE TABLE IF NOT EXISTS japanese_prints (
     set_code TEXT NOT NULL,
     collector_number TEXT NOT NULL,
     rarity TEXT NOT NULL DEFAULT '',
+    finish TEXT NOT NULL DEFAULT 'unknown',
+    finish_raw TEXT,
     japanese_name TEXT NOT NULL,
     source_url TEXT NOT NULL,
     imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -160,9 +164,28 @@ class CatalogueRepository:
         self.connection = sqlite3.connect(self.path)
         self.connection.row_factory = sqlite3.Row
         self.connection.executescript(SCHEMA)
+        self._migrate_schema()
+        self.connection.execute("CREATE INDEX IF NOT EXISTS idx_card_prints_finish ON card_prints(finish)")
+        self.connection.execute("CREATE INDEX IF NOT EXISTS idx_japanese_prints_finish ON japanese_prints(finish)")
+        self.connection.commit()
 
     def close(self) -> None:
         self.connection.close()
+
+    def _migrate_schema(self) -> None:
+        """Add finish fields without rewriting an existing local catalogue."""
+        self._add_column_if_missing("card_prints", "finish", "TEXT NOT NULL DEFAULT 'unknown'")
+        self._add_column_if_missing("card_prints", "finish_raw", "TEXT")
+        self._add_column_if_missing("japanese_prints", "finish", "TEXT NOT NULL DEFAULT 'unknown'")
+        self._add_column_if_missing("japanese_prints", "finish_raw", "TEXT")
+
+    def _add_column_if_missing(self, table: str, column: str, definition: str) -> None:
+        columns = {
+            str(row["name"])
+            for row in self.connection.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column not in columns:
+            self.connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def __enter__(self) -> "CatalogueRepository":
         return self
@@ -311,7 +334,7 @@ class CatalogueRepository:
                     ),
                 )
                 if official_rows:
-                    self._link_japanese_name_to_official_cards(official_rows, japanese["japanese_name"])
+                    self._link_japanese_print_to_official_cards(official_rows, japanese)
                     preserved_official += 1
                     continue
                 self._upsert(
@@ -321,6 +344,8 @@ class CatalogueRepository:
                         rarity=rarity,
                         english_name=mapping.english_name,
                         japanese_name=japanese["japanese_name"],
+                        finish=japanese["finish"],
+                        finish_raw=japanese["finish_raw"],
                         aliases=mapping.aliases,
                         source=f"{mapping.source}-{mapping.status}",
                         source_url=mapping.source_url,
@@ -361,7 +386,7 @@ class CatalogueRepository:
                         set_code, japanese["collector_number"]
                     )
                     if official_rows:
-                        self._link_japanese_name_to_official_cards(official_rows, japanese["japanese_name"])
+                        self._link_japanese_print_to_official_cards(official_rows, japanese)
                         preserved_official += 1
                         continue
                     self._upsert(
@@ -371,6 +396,8 @@ class CatalogueRepository:
                             rarity=japanese["rarity"],
                             english_name=source_mapping.english_name,
                             japanese_name=japanese["japanese_name"],
+                            finish=japanese["finish"],
+                            finish_raw=japanese["finish_raw"],
                             aliases=source_mapping.aliases,
                             source=f"{source_mapping.source}-derived-{source_mapping.status}",
                             source_url=source_mapping.source_url,
@@ -525,6 +552,8 @@ class CatalogueRepository:
                 japanese_name=row["japanese_name"],
                 source_url=row["source_url"],
                 id=int(row["id"]),
+                finish=row["finish"],
+                finish_raw=row["finish_raw"],
             )
             for row in rows
         ]
@@ -551,6 +580,8 @@ class CatalogueRepository:
                 japanese_name=row["japanese_name"],
                 source_url=row["source_url"],
                 id=int(row["id"]),
+                finish=row["finish"],
+                finish_raw=row["finish_raw"],
             )
             for row in rows
         ]
@@ -797,10 +828,15 @@ class CatalogueRepository:
         self.connection.execute(
             """
             INSERT INTO card_prints (
-                set_code, collector_number, rarity, english_name, japanese_name,
+                set_code, collector_number, rarity, finish, finish_raw, english_name, japanese_name,
                 aliases_json, normalised_name, normalised_aliases, source, source_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(set_code, collector_number, rarity) DO UPDATE SET
+                finish = CASE
+                    WHEN excluded.finish != 'unknown' THEN excluded.finish
+                    ELSE card_prints.finish
+                END,
+                finish_raw = COALESCE(excluded.finish_raw, card_prints.finish_raw),
                 english_name = excluded.english_name,
                 japanese_name = excluded.japanese_name,
                 aliases_json = excluded.aliases_json,
@@ -814,6 +850,8 @@ class CatalogueRepository:
                 card.set_code,
                 card.collector_number,
                 card.rarity,
+                card.finish.value,
+                card.finish_raw,
                 card.english_name,
                 card.japanese_name,
                 aliases_json,
@@ -1168,6 +1206,8 @@ class CatalogueRepository:
             japanese_name=japanese["japanese_name"],
             source="japanese-serial-only",
             source_url=japanese["source_url"],
+            finish=japanese["finish"],
+            finish_raw=japanese["finish_raw"],
         )
 
     @staticmethod
@@ -1193,18 +1233,31 @@ class CatalogueRepository:
         self.connection.execute(
             """
             INSERT INTO japanese_prints (
-                set_code, collector_number, rarity, japanese_name, source_url
-            ) VALUES (?, ?, ?, ?, ?)
+                set_code, collector_number, rarity, finish, finish_raw, japanese_name, source_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(set_code, collector_number) DO UPDATE SET
                 rarity = CASE
                     WHEN excluded.rarity != '' THEN excluded.rarity
                     ELSE japanese_prints.rarity
                 END,
+                finish = CASE
+                    WHEN excluded.finish != 'unknown' THEN excluded.finish
+                    ELSE japanese_prints.finish
+                END,
+                finish_raw = COALESCE(excluded.finish_raw, japanese_prints.finish_raw),
                 japanese_name = excluded.japanese_name,
                 source_url = excluded.source_url,
                 imported_at = CURRENT_TIMESTAMP
             """,
-            (card.set_code, card.collector_number, card.rarity, card.japanese_name, card.source_url),
+            (
+                card.set_code,
+                card.collector_number,
+                card.rarity,
+                card.finish.value,
+                card.finish_raw,
+                card.japanese_name,
+                card.source_url,
+            ),
         )
         row = self._japanese_by_reference(card.set_code, card.collector_number)
         assert row is not None
@@ -1219,13 +1272,24 @@ class CatalogueRepository:
             (set_code, collector_number),
         ).fetchall()
 
-    def _link_japanese_name_to_official_cards(
-        self, official_rows: Iterable[sqlite3.Row], japanese_name: str
+    def _link_japanese_print_to_official_cards(
+        self, official_rows: Iterable[sqlite3.Row], japanese: sqlite3.Row
     ) -> None:
         for official in official_rows:
             self.connection.execute(
-                "UPDATE card_prints SET japanese_name = ?, imported_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (japanese_name, official["id"]),
+                """
+                UPDATE card_prints
+                SET japanese_name = ?, finish = CASE WHEN ? != 'unknown' THEN ? ELSE finish END,
+                    finish_raw = COALESCE(?, finish_raw), imported_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (
+                    japanese["japanese_name"],
+                    japanese["finish"],
+                    japanese["finish"],
+                    japanese["finish_raw"],
+                    official["id"],
+                ),
             )
             refreshed = self.connection.execute(
                 "SELECT * FROM card_prints WHERE id = ?", (official["id"],)
@@ -1248,6 +1312,8 @@ class CatalogueRepository:
             rarity=row["rarity"],
             english_name=row["english_name"],
             japanese_name=row["japanese_name"],
+            finish=row["finish"],
+            finish_raw=row["finish_raw"],
             aliases=tuple(json.loads(row["aliases_json"])),
             source=row["source"],
             source_url=row["source_url"],

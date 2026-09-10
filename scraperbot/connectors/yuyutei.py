@@ -9,8 +9,14 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 import httpx
 
-from scraperbot.connectors.base import StoreConnector, StoreUnavailableError, price_from_text, references_card
-from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer
+from scraperbot.connectors.base import (
+    StoreConnector,
+    StoreUnavailableError,
+    matches_card_finish,
+    price_from_text,
+    references_card,
+)
+from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer, finish_from_text
 
 
 class YuyuTeiConnector(StoreConnector):
@@ -51,8 +57,10 @@ class YuyuTeiConnector(StoreConnector):
             if not name_heading or not price_element:
                 continue
             item_text = item.get_text(" ", strip=True)
-            if not cls._contains_print_reference(card, item_text):
+            raw_name = name_heading.get_text(" ", strip=True)
+            if not cls._contains_print_reference(card, item_text) or not matches_card_finish(card, raw_name):
                 continue
+            finish, finish_raw = finish_from_text(raw_name)
             card_link = item.select_one("a[href*='/sell/vg/card/']")
             stock_match = re.search(r"在庫\s*[:：]\s*(\d+)", item_text)
             stock_label = item.select_one(".cart_sell_zaiko")
@@ -84,13 +92,15 @@ class YuyuTeiConnector(StoreConnector):
                 StoreOffer(
                     store_id=cls.store_id,
                     store_name=cls.store_name,
-                    raw_name=name_heading.get_text(" ", strip=True),
+                    raw_name=raw_name,
                     price_yen=price,
                     price_display=price_display,
                     availability=availability,
                     listing_url=urljoin(cls.base_url, card_link["href"]) if card_link else None,
                     match_confidence=MatchConfidence.EXACT_PRINT,
                     stock_count=stock_count,
+                    finish=finish,
+                    finish_raw=finish_raw,
                 )
             )
         return offers

@@ -51,6 +51,8 @@ def test_local_web_search_and_comparison_share_the_catalogue(tmp_path: Path) -> 
                 "set_code": "DZBT16",
                 "collector_number": "FFR02",
                 "rarity": "FFR",
+                "finish": "unknown",
+                "finish_raw": None,
                 "display_code": "DZBT16/FFR02 · FFR",
                 "source": "test",
             }

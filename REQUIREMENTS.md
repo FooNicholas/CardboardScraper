@@ -87,7 +87,7 @@
 | Promo identity enrichment | Review workflow complete — content review pending | `scraperbot-promo-review export` creates a Yuyu-Tei-scoped JSON queue only for actually listed D-PR prints with no safe English mapping. The current queue has 953 playable entries; 81 Yuyu-Tei-listed utility entries are held. `apply` accepts only explicit approved entries and records their source URL. |
 | One-time translation review | Ready for reviewed input | Translate only unresolved playable names during review; enter the approved result and provenance through the local promo review file. Energy, Energy Generator, and Quick Shield remain held. No user search may trigger a translation. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
-| Finish / holo metadata | Planned | Extend print and retailer listing data with raw finish text plus a normalised holo flag. Keep it independent from rarity so examples such as `PR 焔の巫女 シンディ(H仕様)` can be identified accurately. |
+| Finish / holo metadata | Implemented | Canonical Japanese prints and store offers retain raw finish text plus a normalised holo/standard/unknown value. Official `H仕様` suffixes are stored as holo, and an explicitly conflicting retailer finish is excluded from an exact-print comparison. |
 | Rarity and finish filters | Planned | Add browser controls and Telegram syntax for filtering a name search by one or more rarities and, when populated, holo/standard finish. Keep the existing trailing-rarity shortcut compatible. |
 | Lowest-price all-printings comparison | Planned | Add an opt-in card-level view that compares every verified Japanese reprint of the same canonical card, labels each offer with its exact print and finish, and sorts offers by current price. Do not group cards from fuzzy English-name similarity alone. |
 | Multi-store promo lookup | In progress | Yuyu-Tei now uses the stored D-Promo range page for a selected D-PR serial and verifies its exact reference. Card Rush, VanHappy, and BigWeb still need explicit promo catalogue locations or serial-first lookup paths. |
@@ -148,12 +148,13 @@
 
 ### Planned print-variant and card-level comparison sequence
 
-1. Extend the canonical Japanese printing and store-offer schemas with a raw
-   finish annotation and a normalised finish type. Import `H仕様` as holo while
-   retaining the original text for display and later rules.
-2. Update each store parser and its exact-reference matcher to capture rarity
-   and finish independently; add fixtures for standard and holo variants of
-   the same name.
+1. **Complete:** extend the canonical Japanese printing and store-offer
+   schemas with a raw finish annotation and a normalised finish type. `H仕様`
+   imports as holo while retaining the original text for display and later
+   rules.
+2. **Complete:** update each store parser and exact-reference matcher to
+   capture finish independently from rarity. A tested Yuyu-Tei fixture proves
+   a declared standard variant cannot be returned for a selected holo print.
 3. Add a rarity/finish filter layer to browser search results and Telegram
    commands. Filtering narrows results only; it must never change a card's
    identity or hide a result merely because finish data is unknown.

@@ -8,8 +8,8 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup, Tag
 import httpx
 
-from scraperbot.connectors.base import StoreConnector, StoreUnavailableError, references_card
-from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer
+from scraperbot.connectors.base import StoreConnector, StoreUnavailableError, matches_card_finish, references_card
+from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer, finish_from_text
 
 
 class CardRushConnector(StoreConnector):
@@ -78,6 +78,9 @@ class CardRushConnector(StoreConnector):
             condition_match = cls._condition_pattern.search(item_text)
             condition = condition_match.group(1).strip() if condition_match else None
             raw_name = cls._name_text(item, item_text)
+            if not matches_card_finish(card, raw_name):
+                continue
+            finish, finish_raw = finish_from_text(raw_name)
             listing_url = urljoin(cls.base_url, product_link["href"]) if product_link else None
             key = (listing_url or raw_name, item_text, price, condition)
             if key in seen:
@@ -95,6 +98,8 @@ class CardRushConnector(StoreConnector):
                     match_confidence=MatchConfidence.EXACT_PRINT,
                     condition=condition,
                     stock_count=stock_count,
+                    finish=finish,
+                    finish_raw=finish_raw,
                 )
             )
         return offers

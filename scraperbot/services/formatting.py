@@ -5,7 +5,7 @@ from __future__ import annotations
 from html import escape
 from typing import Sequence
 
-from scraperbot.models import Availability, CardPrint, ComparisonResult
+from scraperbot.models import Availability, CardPrint, ComparisonResult, Finish
 
 
 def format_card_choices(cards: Sequence[CardPrint]) -> str:
@@ -31,12 +31,16 @@ def format_comparison(result: ComparisonResult) -> str:
                 availability = " — ◯"
             else:
                 availability = ""
+            finish_label = offer.finish_raw or (
+                "Holo" if offer.finish is Finish.HOLO else "Standard" if offer.finish is Finish.STANDARD else ""
+            )
+            finish = f" · {escape(finish_label)}" if finish_label else ""
             if offer.listing_url:
                 lines.append(
-                    f'<a href="{escape(offer.listing_url, quote=True)}">{store}</a>{condition}: {price}{availability}'
+                    f'<a href="{escape(offer.listing_url, quote=True)}">{store}</a>{condition}: {price}{availability}{finish}'
                 )
             else:
-                lines.append(f"{store}{condition}: {price}{availability}")
+                lines.append(f"{store}{condition}: {price}{availability}{finish}")
     else:
         lines.append("No matching offers found.")
     if result.no_active_listing_stores:

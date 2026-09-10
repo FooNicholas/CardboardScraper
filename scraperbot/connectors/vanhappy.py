@@ -8,8 +8,8 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup, Tag
 import httpx
 
-from scraperbot.connectors.base import StoreConnector, StoreUnavailableError, references_card
-from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer
+from scraperbot.connectors.base import StoreConnector, StoreUnavailableError, matches_card_finish, references_card
+from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer, finish_from_text
 
 
 class VanHappyConnector(StoreConnector):
@@ -62,8 +62,13 @@ class VanHappyConnector(StoreConnector):
                 continue
             raw_name = name_node.get_text(" ", strip=True)
             reference_match = cls._reference_pattern.search(raw_name)
-            if not reference_match or not references_card(card, reference_match.group(1)):
+            if (
+                not reference_match
+                or not references_card(card, reference_match.group(1))
+                or not matches_card_finish(card, raw_name)
+            ):
                 continue
+            finish, finish_raw = finish_from_text(raw_name)
             price_match = re.search(r"[¥￥]\s*([0-9][0-9,]*)", price_node.get_text(" ", strip=True))
             if not price_match:
                 continue
@@ -96,6 +101,8 @@ class VanHappyConnector(StoreConnector):
                     listing_url=listing_url,
                     match_confidence=MatchConfidence.EXACT_PRINT,
                     stock_count=stock_count,
+                    finish=finish,
+                    finish_raw=finish_raw,
                 )
             )
         return offers

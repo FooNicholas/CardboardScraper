@@ -8,8 +8,8 @@ from typing import Any
 
 import httpx
 
-from scraperbot.connectors.base import StoreConnector, StoreUnavailableError, references_card
-from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer, normalise_set_code
+from scraperbot.connectors.base import StoreConnector, StoreUnavailableError, matches_card_finish, references_card
+from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer, finish_from_text, normalise_set_code
 
 
 class BigWebConnector(StoreConnector):
@@ -111,6 +111,10 @@ class BigWebConnector(StoreConnector):
                 reference = f"{cardset.get('slip', '')}/{(item.get('rarity') or {}).get('slip', '')}"
             if not references_card(card, reference):
                 continue
+            raw_name = str(item.get("name", ""))
+            if not matches_card_finish(card, raw_name):
+                continue
+            finish, finish_raw = finish_from_text(raw_name)
             raw_stock_count = item.get("stock_count")
             stock_count = int(raw_stock_count) if raw_stock_count is not None else None
             sold_out = bool(item.get("is_sold_out")) or stock_count == 0
@@ -120,7 +124,7 @@ class BigWebConnector(StoreConnector):
                 StoreOffer(
                     store_id=cls.store_id,
                     store_name=cls.store_name,
-                    raw_name=str(item.get("name", "")),
+                    raw_name=raw_name,
                     price_yen=price,
                     price_display=f"¥{price:,}" if price is not None else "Price unavailable",
                     availability=Availability.SOLD_OUT if sold_out else Availability.IN_STOCK,
@@ -128,6 +132,8 @@ class BigWebConnector(StoreConnector):
                     match_confidence=MatchConfidence.EXACT_PRINT,
                     condition=condition,
                     stock_count=stock_count,
+                    finish=finish,
+                    finish_raw=finish_raw,
                 )
             )
         return offers

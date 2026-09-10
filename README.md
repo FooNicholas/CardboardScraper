@@ -16,6 +16,9 @@ only after the user has chosen it.
 
 - Local FTS and fuzzy English-name search, including aliases and optional
   trailing rarity: `/price Youthberk FFR`.
+- Explicitly labelled print finishes are kept separate from rarity. For
+  example, `H仕様` is recorded as a holo finish while preserving the original
+  Japanese label for display and exact-listing checks.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as an English-name mapping source.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and

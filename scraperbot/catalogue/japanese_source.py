@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 import httpx
 
 from scraperbot.catalogue.official_source import OfficialExpansion, OfficialSourceError
-from scraperbot.models import JapaneseCardPrint, normalise_set_code
+from scraperbot.models import JapaneseCardPrint, normalise_set_code, split_finish_annotation
 
 
 class OfficialJapaneseCardSource:
@@ -112,6 +112,7 @@ class OfficialJapaneseCardSource:
             name = direct_name or name_node.get_text(" ", strip=True)
             if not name:
                 continue
+            name, finish, finish_raw = split_finish_annotation(name)
             set_code, collector_number = parsed
             cards.append(
                 JapaneseCardPrint(
@@ -120,6 +121,8 @@ class OfficialJapaneseCardSource:
                     rarity=cls._rarity_from_collector_number(collector_number),
                     japanese_name=name,
                     source_url=urljoin(cls.base_url, link["href"]),
+                    finish=finish,
+                    finish_raw=finish_raw,
                 )
             )
         return cards

@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import re
 
-from scraperbot.models import CardPrint, StoreOffer, normalise_collector_number, normalise_set_code
+from scraperbot.models import CardPrint, Finish, StoreOffer, finish_from_text
 
 
 class StoreUnavailableError(RuntimeError):
@@ -32,6 +32,21 @@ def normalise_print_reference(value: str) -> str:
 
 def references_card(card: CardPrint, retailer_reference: str) -> bool:
     return normalise_print_reference(print_reference(card)) == normalise_print_reference(retailer_reference)
+
+
+def matches_card_finish(card: CardPrint, listing_name: str) -> bool:
+    """Reject a seller listing only when it explicitly names another finish.
+
+    Unknown is deliberately permissive. A retailer may omit finish data even
+    when the selected canonical print has one, and absence is not evidence of
+    a standard finish.
+    """
+    listing_finish, _ = finish_from_text(listing_name)
+    return (
+        card.finish is Finish.UNKNOWN
+        or listing_finish is Finish.UNKNOWN
+        or card.finish is listing_finish
+    )
 
 
 def price_from_text(value: str) -> int | None:
