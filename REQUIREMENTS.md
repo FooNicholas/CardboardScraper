@@ -6,6 +6,10 @@
 - Catalogue only two item types: playable cards and Energy cards.
 - Keep each physical printing distinct by its printed set code and collector
   number, even when the Japanese and English releases use different codes.
+- Keep finish separate from rarity. Capture an explicitly shown foil/holo
+  treatment such as `H仕様` for `PR 焔の巫女 シンディ(H仕様)`, retain the
+  retailer's original annotation, and expose a normalised `holo` flag. Do not
+  infer finish from `PR`, a collector number, or a price.
 - Store the official Japanese name, an English search name when known, mapping
   provenance, and any retailer-specific catalogue location needed to retrieve
   that print accurately.
@@ -29,6 +33,10 @@
   entry.
 - A bare collector number is only accepted after the user narrows the set
   family, because the same number can occur in more than one product.
+- After a name search, users must be able to filter the matching Japanese
+  printings by rarity and finish. Rarity filtering must work in the browser
+  interface and Telegram, without requiring users to remember the printed
+  number. Existing trailing-rarity text is a shortcut, not the only interface.
 
 ## Promo and cross-print mapping
 
@@ -49,6 +57,10 @@
   and the retailer product link.
 - Retailer catalogue pages can seed Japanese names and serials, but are not the
   canonical identity source for a print.
+- Provide a separate all-printings comparison for a named card: gather offers
+  for every verified Japanese reprint of that canonical card, retain the
+  print code, rarity, and finish on each offer, and sort by the lowest current
+  price. The existing exact-print comparison remains the default.
 
 ## Known defects
 
@@ -75,6 +87,9 @@
 | Promo identity enrichment | Review workflow complete — content review pending | `scraperbot-promo-review export` creates a Yuyu-Tei-scoped JSON queue only for actually listed D-PR prints with no safe English mapping. The current queue has 953 playable entries; 81 Yuyu-Tei-listed utility entries are held. `apply` accepts only explicit approved entries and records their source URL. |
 | One-time translation review | Ready for reviewed input | Translate only unresolved playable names during review; enter the approved result and provenance through the local promo review file. Energy, Energy Generator, and Quick Shield remain held. No user search may trigger a translation. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
+| Finish / holo metadata | Planned | Extend print and retailer listing data with raw finish text plus a normalised holo flag. Keep it independent from rarity so examples such as `PR 焔の巫女 シンディ(H仕様)` can be identified accurately. |
+| Rarity and finish filters | Planned | Add browser controls and Telegram syntax for filtering a name search by one or more rarities and, when populated, holo/standard finish. Keep the existing trailing-rarity shortcut compatible. |
+| Lowest-price all-printings comparison | Planned | Add an opt-in card-level view that compares every verified Japanese reprint of the same canonical card, labels each offer with its exact print and finish, and sorts offers by current price. Do not group cards from fuzzy English-name similarity alone. |
 | Multi-store promo lookup | In progress | Yuyu-Tei now uses the stored D-Promo range page for a selected D-PR serial and verifies its exact reference. Card Rush, VanHappy, and BigWeb still need explicit promo catalogue locations or serial-first lookup paths. |
 | Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
 | Dorasuta | Deferred | Do not add the Dorasuta connector at this time. |
@@ -130,6 +145,27 @@
 12. Backfill promo ranges incrementally, verify exact-print offers and stock
    indicators against live listings, then mark each range complete in the
    import checkpoint.
+
+### Planned print-variant and card-level comparison sequence
+
+1. Extend the canonical Japanese printing and store-offer schemas with a raw
+   finish annotation and a normalised finish type. Import `H仕様` as holo while
+   retaining the original text for display and later rules.
+2. Update each store parser and its exact-reference matcher to capture rarity
+   and finish independently; add fixtures for standard and holo variants of
+   the same name.
+3. Add a rarity/finish filter layer to browser search results and Telegram
+   commands. Filtering narrows results only; it must never change a card's
+   identity or hide a result merely because finish data is unknown.
+4. Introduce a verified card-family relation that groups Japanese reprints
+   only when they share explicit canonical Japanese identity or vetted
+   cross-print evidence. Names that merely look alike remain separate.
+5. Add an opt-in “lowest price across printings” comparison: retrieve each
+   family member with the existing exact-print connectors, retain print,
+   rarity, finish, availability, and stock, then sort priced offers ascending.
+   Show unavailable prices separately and do not treat them as unknown.
+6. Add browser and Telegram presentation for the aggregate view, while
+   preserving the current selected-print comparison as the default.
 
 ### Explicit non-goals for this work
 
