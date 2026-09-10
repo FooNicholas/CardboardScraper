@@ -118,6 +118,17 @@ The bulk Fandom command only visits sets with remaining unmapped Japanese
 prints; it keeps going if a page is unavailable and reports those sets for
 review.
 
+Some English reprints correspond to a Japanese promo with a different card
+number. Map those declared relationships for each relevant English set:
+
+```sh
+scraperbot-map-cross-prints --set DZ-BT12
+```
+
+This only accepts Japanese counterparts listed beside that exact English print
+on its Fandom card page; it never guesses from translated names or similar
+numbers.
+
 Finally, the derivation command resolves reprints only when the exact Japanese
 name has one unambiguous existing English mapping. It never uses machine
 translation or guesses from similar names.

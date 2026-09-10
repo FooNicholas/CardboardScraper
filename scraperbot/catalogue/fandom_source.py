@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 import httpx
 
 from scraperbot.catalogue.official_source import OfficialSourceError
-from scraperbot.models import EnglishNameMapping, normalise_set_code
+from scraperbot.models import CardPrint, EnglishNameMapping, normalise_collector_number, normalise_set_code
 
 
 class FandomMappingSource:
@@ -66,6 +66,17 @@ class FandomMappingSource:
         if not best_mappings:
             raise OfficialSourceError(f"Fandom did not provide card mappings for {wanted}.")
         return best_title, best_mappings
+
+    async def cross_print_mappings_for_card(self, card: CardPrint) -> list[EnglishNameMapping]:
+        """Map Japanese print references declared on one English card page.
+
+        Regional releases can use unrelated print identifiers, such as an
+        English Re card and a Japanese promo. A Fandom card page explicitly
+        lists these as the same card, so use that declared relationship rather
+        than trying to compare translated names or infer it from numbering.
+        """
+        page_html = await self._page_html(card.english_name)
+        return self.cross_print_mappings_from_page(card, page_html)
 
     async def _candidate_titles(self, set_code: str) -> list[str]:
         payload = await self._get_json(
@@ -174,9 +185,68 @@ class FandomMappingSource:
             )
         return mappings
 
+    @classmethod
+    def cross_print_mappings_from_page(
+        cls, card: CardPrint, html: str
+    ) -> list[EnglishNameMapping]:
+        """Build mappings for the other print references on a card page.
+
+        The page must declare the selected English print itself before any
+        other reference is accepted. That keeps a similarly named or redirected
+        Fandom page from connecting unrelated cards.
+        """
+        references = cls.parse_card_set_references(html)
+        selected_reference = (card.set_code, card.collector_number)
+        if selected_reference not in references:
+            return []
+        source_url = cls._page_url(card.english_name)
+        mappings: list[EnglishNameMapping] = []
+        for set_code, collector_number in references:
+            if (set_code, collector_number) == selected_reference:
+                continue
+            mappings.append(
+                EnglishNameMapping(
+                    set_code=set_code,
+                    collector_number=collector_number,
+                    rarity=cls._rarity(collector_number, ""),
+                    english_name=card.english_name,
+                    aliases=card.aliases,
+                    source="fandom-cross-print",
+                    source_url=source_url,
+                    status="verified",
+                )
+            )
+        return mappings
+
+    @classmethod
+    def parse_card_set_references(cls, html: str) -> list[tuple[str, str]]:
+        """Read declared print identifiers from a Fandom ``Card Set(s)`` table."""
+        soup = BeautifulSoup(html, "lxml")
+        tables = [
+            table
+            for table in soup.select("table")
+            if table.find("th")
+            and cls._normalise_header(table.find("th").get_text(" ", strip=True)).replace(" ", "")
+            == "cardsets"
+        ]
+        references: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for table in tables:
+            for item in table.select("li"):
+                for matched in re.finditer(r"\b([A-Za-z]+(?:-[A-Za-z]+)?\d*)/([A-Za-z0-9_]+)\b", item.get_text(" ", strip=True)):
+                    set_code = normalise_set_code(matched.group(1))
+                    collector_number = normalise_collector_number(matched.group(2))
+                    if collector_number.endswith("EN"):
+                        collector_number = collector_number[:-2]
+                    reference = (set_code, collector_number)
+                    if reference not in seen:
+                        seen.add(reference)
+                        references.append(reference)
+        return references
+
     @staticmethod
     def _normalise_header(value: str) -> str:
-        return " ".join(value.casefold().replace(".", "").split())
+        return " ".join(re.sub(r"[^a-z0-9]+", " ", value.casefold()).split())
 
     @staticmethod
     def _parse_reference(value: str) -> tuple[str, str] | None:

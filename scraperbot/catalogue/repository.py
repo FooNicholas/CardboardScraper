@@ -10,7 +10,7 @@ from typing import Iterable
 
 from rapidfuzz import fuzz
 
-from scraperbot.models import CardPrint, EnglishNameMapping, JapaneseCardPrint, normalise_text
+from scraperbot.models import CardPrint, EnglishNameMapping, JapaneseCardPrint, normalise_set_code, normalise_text
 
 
 SCHEMA = """
@@ -324,6 +324,28 @@ class CatalogueRepository:
             )
             for row in rows
         ]
+
+    def unlinked_official_english_cards(self, set_codes: Iterable[str]) -> list[CardPrint]:
+        """Return official English prints still lacking a Japanese counterpart.
+
+        Callers provide a small, explicit set scope because resolving a
+        cross-print relationship requires reading each card's Fandom page.
+        """
+        wanted = sorted({normalise_set_code(set_code) for set_code in set_codes if set_code.strip()})
+        if not wanted:
+            return []
+        placeholders = ", ".join("?" for _ in wanted)
+        rows = self.connection.execute(
+            f"""
+            SELECT * FROM card_prints
+            WHERE source = 'official-english'
+              AND (japanese_name IS NULL OR TRIM(japanese_name) = '')
+              AND set_code IN ({placeholders})
+            ORDER BY set_code, collector_number, rarity
+            """,
+            wanted,
+        ).fetchall()
+        return [self._to_card(row) for row in rows]
 
     def derive_name_mappings_from_known_japanese_names(self) -> MappingImportResult:
         """Map reprints when their Japanese name has one trusted English name.

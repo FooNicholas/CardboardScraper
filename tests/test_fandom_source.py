@@ -1,4 +1,5 @@
 from scraperbot.catalogue.fandom_source import FandomMappingSource
+from scraperbot.models import CardPrint
 
 
 def test_parse_fandom_card_table_to_provisional_mappings() -> None:
@@ -44,4 +45,28 @@ def test_parse_fandom_promo_list_to_mappings() -> None:
     assert [(mapping.collector_number, mapping.english_name) for mapping in mappings] == [
         ("006", "Blazing Spear Dragon"),
         ("007", "Direful Doll, Violetta"),
+    ]
+
+
+def test_card_page_cross_print_mapping_connects_different_japanese_and_english_codes() -> None:
+    card = CardPrint(
+        "DZ-BT12",
+        "Re07",
+        "RE",
+        "The Nebula Knight's Path to Reach for the Stars",
+        source="official-english",
+    )
+    html = """
+    <table class="sets"><tr><th>Card Set(s)</th></tr><tr><td><ul>
+      <li><a>D Promo Cards</a> - D-PR/1247 2025</li>
+      <li><a>Chasm of Lost Souls</a> - DZ-BT12/Re07EN (Re) 2026</li>
+    </ul></td></tr></table>
+    """
+    assert FandomMappingSource.parse_card_set_references(html) == [
+        ("DPR", "1247"),
+        ("DZBT12", "RE07"),
+    ]
+    mappings = FandomMappingSource.cross_print_mappings_from_page(card, html)
+    assert [(mapping.set_code, mapping.collector_number, mapping.english_name) for mapping in mappings] == [
+        ("DPR", "1247", "The Nebula Knight's Path to Reach for the Stars"),
     ]
