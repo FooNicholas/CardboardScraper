@@ -25,9 +25,9 @@ only after the user has chosen it.
   prints whose finish is not yet labelled rather than guessing they are
   standard.
 - When a search resolves to one verified Japanese reprint family, use the
-  far-right “Lowest across printings” button in the filter bar to compare all
-  of them immediately—no individual print selection required. Offers remain
-  labelled with their own print code, rarity, finish, stock, and availability.
+  far-right “Sort by lowest” filter-style button to compare all of them
+  immediately—no individual print selection required. Offers remain labelled
+  with their own print code, rarity, finish, stock, and availability.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as an English-name mapping source.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and
