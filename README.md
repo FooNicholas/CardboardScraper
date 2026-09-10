@@ -23,6 +23,9 @@ only after the user has chosen it.
   `rarity:FFR,SEC` and `finish:holo`. A finish filter intentionally retains
   prints whose finish is not yet labelled rather than guessing they are
   standard.
+- After comparing one print, choose “Lowest across printings” to aggregate
+  exact store offers for its verified Japanese reprints. Offers remain labelled
+  with their own print code, rarity, finish, stock, and availability.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as an English-name mapping source.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and

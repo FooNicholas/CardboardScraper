@@ -3,7 +3,7 @@ import asyncio
 from scraperbot.connectors.base import StoreConnector, StoreUnavailableError
 from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer
 from scraperbot.services.comparison import ComparisonService
-from scraperbot.services.formatting import format_comparison
+from scraperbot.services.formatting import format_comparison, format_family_comparison
 
 
 CARD = CardPrint("DZBT16", "FFR02", "FFR", "Exzabite Dragon", source="test")
@@ -21,6 +21,15 @@ class FixedConnector(StoreConnector):
         if isinstance(self.outcome, Exception):
             raise self.outcome
         return self.outcome
+
+
+class FamilyConnector(StoreConnector):
+    store_id = "family"
+    store_name = "Family Store"
+
+    async def search(self, card: CardPrint) -> list[StoreOffer]:
+        price = 900 if card.collector_number == "001" else 400
+        return [offer(self.store_id, price)]
 
 
 def offer(
@@ -89,3 +98,16 @@ def test_comparison_labels_an_out_of_stock_price() -> None:
 def test_comparison_includes_a_listed_stock_count() -> None:
     result = asyncio.run(ComparisonService([FixedConnector("store", [offer("store", 420, stock_count=3)])]).compare(CARD))
     assert "3 left" in format_comparison(result)
+
+
+def test_family_comparison_sorts_exact_print_offers_by_price() -> None:
+    base = CardPrint("DZBT01", "001", "RRR", "Example Card", japanese_name="日本語名", source="test")
+    reprint = CardPrint("DZBT02", "002", "FFR", "Example Card", japanese_name="日本語名", source="test")
+
+    result = asyncio.run(ComparisonService([FamilyConnector()]).compare_family(base, [base, reprint]))
+
+    assert [item.offer.price_yen for item in result.offers] == [400, 900]
+    assert [item.card.collector_number for item in result.offers] == ["002", "001"]
+    rendered = format_family_comparison(result)
+    assert "DZBT02/002 · FFR" in rendered
+    assert "¥400" in rendered

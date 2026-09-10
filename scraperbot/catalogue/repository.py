@@ -898,6 +898,28 @@ class CatalogueRepository:
         ).fetchone()
         return self._serial_selection_from_japanese(japanese) if japanese else None
 
+    def verified_reprint_family(self, card: CardPrint) -> list[CardPrint]:
+        """Return reprints only when both canonical names agree exactly.
+
+        This is deliberately stricter than the user-facing fuzzy English
+        search: all family members must share the selected Japanese canonical
+        name *and* its normalised stored English mapping. Similar translated
+        names or aliases cannot create a price-comparison family.
+        """
+        if not card.japanese_name:
+            return [card]
+        rows = self.connection.execute(
+            """
+            SELECT * FROM card_prints
+            WHERE japanese_name = ? AND normalised_name = ?
+              AND japanese_name IS NOT NULL AND TRIM(japanese_name) != ''
+            ORDER BY set_code, collector_number, rarity, finish, id
+            """,
+            (card.japanese_name, normalise_text(card.english_name)),
+        ).fetchall()
+        family = [self._to_card(row) for row in rows]
+        return family or [card]
+
     def lookup_japanese_serial(self, value: str) -> CardPrint | None:
         """Resolve one formatted Japanese serial without accepting bare numbers.
 

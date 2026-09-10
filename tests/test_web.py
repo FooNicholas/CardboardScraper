@@ -66,6 +66,7 @@ def test_local_web_search_and_comparison_share_the_catalogue(tmp_path: Path) -> 
         assert comparison["offers"][0]["store_name"] == "Example Store"
         assert comparison["offers"][0]["match_confidence"] == "exact_japanese_name"
         assert comparison["offers"][0]["stock_count"] == 3
+        assert comparison["family_print_count"] == 1
 
 
 def test_local_web_hides_english_only_prints(tmp_path: Path) -> None:
@@ -115,3 +116,20 @@ def test_local_web_shows_more_than_twelve_shared_name_prints(tmp_path: Path) -> 
         assert {card["collector_number"] for card in results} == {
             str(1200 + number) for number in range(13)
         }
+
+
+def test_local_web_compares_the_lowest_price_across_verified_reprints(tmp_path: Path) -> None:
+    with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
+        first = catalogue.upsert(
+            CardPrint("DZ-BT01", "001", "RRR", "Example Card", japanese_name="日本語名", source="test")
+        )
+        catalogue.upsert(
+            CardPrint("DZ-BT02", "002", "FFR", "Example Card", japanese_name="日本語名", source="test")
+        )
+        app = LocalPriceCheckWeb(catalogue, ComparisonService([FixedConnector()]))
+
+        family = asyncio.run(app.compare_family(first.id or 0))
+
+    assert family["print_count"] == 2
+    assert len(family["offers"]) == 2
+    assert {offer["card"]["collector_number"] for offer in family["offers"]} == {"001", "002"}

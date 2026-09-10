@@ -51,6 +51,8 @@ def test_search_supports_partial_alias_and_typo(tmp_path: Path) -> None:
         assert catalogue.search("skyfall", japanese_only=True)[0].english_name == 'Youthberk "Skyfall Arms"'
         assert not catalogue.search("blaster", rarity="RRR", japanese_only=True)
         assert catalogue.get(blaster.id or 0, japanese_only=True) is None
+        family = catalogue.verified_reprint_family(catalogue.search("skyfall")[0])
+        assert {card.collector_number for card in family} == {"015", "017"}
 
 
 def test_importer_accepts_card_prints_envelope(tmp_path: Path) -> None:

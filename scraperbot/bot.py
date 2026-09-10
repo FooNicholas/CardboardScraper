@@ -12,7 +12,7 @@ from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.models import CardPrint
 from scraperbot.query import parse_name_search_query
 from scraperbot.services.comparison import ComparisonService
-from scraperbot.services.formatting import format_card_choices, format_comparison
+from scraperbot.services.formatting import format_card_choices, format_comparison, format_family_comparison
 
 
 # Energy, Energy Generator, and Quick Shield promos share English names but
@@ -31,6 +31,15 @@ def choice_keyboard(cards: list[CardPrint]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
+def family_comparison_keyboard(card: CardPrint, print_count: int) -> InlineKeyboardMarkup | None:
+    """Offer aggregation only when an exact-name reprint family exists."""
+    if card.id is None or print_count < 2:
+        return None
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(f"Lowest price across {print_count} printings", callback_data=f"family:{card.id}")]]
+    )
+
+
 class TelegramPriceBot:
     """Handlers for card-name search, selection, and concurrent comparison."""
 
@@ -44,6 +53,7 @@ class TelegramPriceBot:
             CommandHandler(("price", "compare"), self.price),
             CommandHandler("sites", self.sites),
             CallbackQueryHandler(self.select_card, pattern=r"^card:-?\d+$"),
+            CallbackQueryHandler(self.compare_family, pattern=r"^family:\d+$"),
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.free_text),
         ]
 
@@ -133,6 +143,33 @@ class TelegramPriceBot:
         await callback.edit_message_text("Checking stores…")
         await self._compare_and_reply(callback.message, card, replace=True)
 
+    async def compare_family(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        callback = update.callback_query
+        if not callback or not callback.data or not callback.message:
+            return
+        card = self.catalogue.get_user_selection(int(callback.data.removeprefix("family:")))
+        if not card:
+            await callback.answer("That card is no longer in the local catalogue.", show_alert=True)
+            return
+        family = self.catalogue.verified_reprint_family(card)
+        if len(family) < 2:
+            await callback.answer("No verified alternative printing is available yet.", show_alert=True)
+            return
+        await callback.answer()
+        await callback.edit_message_text("Checking every verified printing…")
+        try:
+            result = await self.comparison.compare_family(card, family)
+            await callback.message.edit_text(
+                format_family_comparison(result),
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+        except Exception:
+            await callback.message.edit_text(
+                f"I could not compare all printings of <b>{escape(card.english_name)}</b> right now. Please try again shortly.",
+                parse_mode=ParseMode.HTML,
+            )
+
     async def _compare_and_reply(self, message: object, card: CardPrint, *, replace: bool = False) -> None:
         if not hasattr(message, "reply_text"):
             return
@@ -142,9 +179,15 @@ class TelegramPriceBot:
         try:
             result = await self.comparison.compare(card)
             body = format_comparison(result)
+            family_keyboard = family_comparison_keyboard(card, len(self.catalogue.verified_reprint_family(card)))
             target = message if replace else progress
             assert target is not None
-            await target.edit_text(body, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            await target.edit_text(
+                body,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+                reply_markup=family_keyboard,
+            )
         except Exception:
             target = message if replace else progress
             assert target is not None

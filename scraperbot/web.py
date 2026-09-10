@@ -17,7 +17,7 @@ from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardrush import CardRushConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
-from scraperbot.models import CardPrint, ComparisonResult, StoreOffer, normalise_finish
+from scraperbot.models import CardFamilyComparisonResult, CardPrint, ComparisonResult, StoreOffer, normalise_finish
 from scraperbot.query import parse_name_search_query
 from scraperbot.services.comparison import ComparisonService
 
@@ -81,7 +81,20 @@ class LocalPriceCheckWeb:
         if not card:
             raise LookupError("That Japanese-market card print is no longer available for comparison.")
         result = await self.comparison.compare(card, refresh=refresh)
-        return self._comparison_payload(result)
+        payload = self._comparison_payload(result)
+        payload["family_print_count"] = len(self.catalogue.verified_reprint_family(card))
+        return payload
+
+    async def compare_family(self, print_id: int, *, refresh: bool = False) -> dict[str, Any]:
+        card = self.catalogue.get_user_selection(print_id)
+        if not card:
+            raise LookupError("That Japanese-market card print is no longer available for comparison.")
+        family = self.catalogue.verified_reprint_family(card)
+        if len(family) < 2:
+            raise LookupError("No verified alternative Japanese printing is available for this card yet.")
+        return self._family_comparison_payload(
+            await self.comparison.compare_family(card, family, refresh=refresh)
+        )
 
     @staticmethod
     def _card_payload(card: CardPrint) -> dict[str, Any]:
@@ -106,6 +119,20 @@ class LocalPriceCheckWeb:
             "no_active_listing_stores": list(result.no_active_listing_stores),
             "unavailable_stores": list(result.unavailable_stores),
             "failed_stores": list(result.failed_stores),
+        }
+
+    @classmethod
+    def _family_comparison_payload(cls, result: CardFamilyComparisonResult) -> dict[str, Any]:
+        return {
+            "selected_card": cls._card_payload(result.selected_card),
+            "print_count": len(result.printings),
+            "offers": [
+                {
+                    **cls._offer_payload(family_offer.offer),
+                    "card": cls._card_payload(family_offer.card),
+                }
+                for family_offer in result.offers
+            ],
         }
 
     @staticmethod
@@ -162,6 +189,23 @@ class LocalWebRequestHandler(BaseHTTPRequestHandler):
                 print_id = int(parameters.get("id", [""])[0])
                 refresh = parameters.get("refresh", ["0"])[0] == "1"
                 payload = asyncio.run(self.application.compare(print_id, refresh=refresh))
+            except ValueError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "A valid card selection is required."})
+            except LookupError as error:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": str(error)})
+            except Exception:
+                self._send_json(
+                    HTTPStatus.BAD_GATEWAY,
+                    {"error": "Store comparison is temporarily unavailable. Please try again."},
+                )
+            else:
+                self._send_json(HTTPStatus.OK, payload)
+            return
+        if request.path == "/api/compare-family":
+            try:
+                print_id = int(parameters.get("id", [""])[0])
+                refresh = parameters.get("refresh", ["0"])[0] == "1"
+                payload = asyncio.run(self.application.compare_family(print_id, refresh=refresh))
             except ValueError:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "A valid card selection is required."})
             except LookupError as error:
@@ -330,7 +374,10 @@ function renderFilters() { clear(filters); const rarities=[...new Set(searchCard
 async function search(raw) { const value=(raw || query.value).trim(); if (!value) { setStatus('Enter a card name to search.', true); return; } query.value=value; clear(results); clear(comparison); clear(filters); filters.hidden=true; selectedId=null; searchCards=[]; activeRarities.clear(); activeFinishes.clear(); setStatus('Finding matching prints…'); searchButton.disabled=true; try { const data=await readJson(await fetch('/api/search?q='+encodeURIComponent(value))); if (!data.cards.length) { setStatus('No Japanese-market print matched that name. Try a shorter spelling.'); return; } searchCards=data.cards; renderFilters(); renderCards(); } catch (error) { setStatus(error.message,true); } finally { searchButton.disabled=false; } }
 function safeLink(url) { try { const parsed=new URL(url); return ['https:','http:'].includes(parsed.protocol) ? parsed.href : null; } catch { return null; } }
 function highlightSelection() { document.querySelectorAll('.card[data-print-id]').forEach(card=>card.classList.toggle('active',Number(card.dataset.printId)===selectedId)); }
-function renderComparison(data) { highlightSelection(); clear(comparison); const head=document.createElement('div'); head.className='comparison-head'; const copy=document.createElement('div'); copy.append(text('h2',data.card.english_name),text('p',(data.card.japanese_name ? data.card.japanese_name+' · ' : '')+data.card.display_code)); const refresh=document.createElement('button'); refresh.textContent='Refresh prices'; refresh.addEventListener('click',()=>compare(data.card.id,true)); head.append(copy,refresh); comparison.append(head); if (!data.offers.length) comparison.append(text('p','No active store listing is available for this exact print right now.','notice')); for (const offer of data.offers) { const row=document.createElement('div'); row.className='offer'; const store=document.createElement(offer.listing_url ? 'a' : 'div'); store.textContent=offer.store_name+(offer.condition ? ' · '+offer.condition : ''); if (offer.listing_url) { const href=safeLink(offer.listing_url); if (href) { store.href=href; store.target='_blank'; store.rel='noopener noreferrer'; } } const detail=text('small',offer.raw_name); const storeWrap=document.createElement('div'); storeWrap.append(store,detail); const stock=Number.isInteger(offer.stock_count) ? offer.stock_count+' left' : offer.availability==='sold_out' ? '×' : offer.availability==='in_stock' ? '◯' : '?'; const finish=offer.finish_raw || (offer.finish==='holo' ? 'Holo' : offer.finish==='standard' ? 'Standard' : ''); const tags=[stock,finish,offer.match_confidence.replaceAll('_',' ')].filter(Boolean).join(' · '); row.append(storeWrap,text('div',offer.price_display,offer.availability==='in_stock'?'price':'sold'),text('div',tags,'tag')); comparison.append(row); } const notices=[]; if (data.no_active_listing_stores.length) notices.push('No active listing (sold out or not stocked): '+data.no_active_listing_stores.join(', ')); if (data.unavailable_stores.length) notices.push('Set not listed: '+data.unavailable_stores.join(', ')); if (data.failed_stores.length) notices.push('Could not check: '+data.failed_stores.join(', ')); if (notices.length) comparison.append(text('p',notices.join(' · '),'notice')); }
+function offerRow(offer, printLabel='') { const row=document.createElement('div'); row.className='offer'; const store=document.createElement(offer.listing_url ? 'a' : 'div'); store.textContent=(printLabel ? printLabel+' · ' : '')+offer.store_name+(offer.condition ? ' · '+offer.condition : ''); if (offer.listing_url) { const href=safeLink(offer.listing_url); if (href) { store.href=href; store.target='_blank'; store.rel='noopener noreferrer'; } } const detail=text('small',offer.raw_name); const storeWrap=document.createElement('div'); storeWrap.append(store,detail); const stock=Number.isInteger(offer.stock_count) ? offer.stock_count+' left' : offer.availability==='sold_out' ? '×' : offer.availability==='in_stock' ? '◯' : '?'; const finish=offer.finish_raw || (offer.finish==='holo' ? 'Holo' : offer.finish==='standard' ? 'Standard' : ''); const tags=[stock,finish,offer.match_confidence.replaceAll('_',' ')].filter(Boolean).join(' · '); row.append(storeWrap,text('div',offer.price_display,offer.availability==='in_stock'?'price':'sold'),text('div',tags,'tag')); return row; }
+function renderComparison(data) { highlightSelection(); clear(comparison); const head=document.createElement('div'); head.className='comparison-head'; const copy=document.createElement('div'); copy.append(text('h2',data.card.english_name),text('p',(data.card.japanese_name ? data.card.japanese_name+' · ' : '')+data.card.display_code)); const actions=document.createElement('div'); const refresh=document.createElement('button'); refresh.textContent='Refresh prices'; refresh.addEventListener('click',()=>compare(data.card.id,true)); actions.append(refresh); if (data.family_print_count>1) { const family=document.createElement('button'); family.textContent='Lowest across '+data.family_print_count+' printings'; family.addEventListener('click',()=>compareFamily(data.card.id)); actions.append(family); } head.append(copy,actions); comparison.append(head); if (!data.offers.length) comparison.append(text('p','No active store listing is available for this exact print right now.','notice')); for (const offer of data.offers) comparison.append(offerRow(offer)); const notices=[]; if (data.no_active_listing_stores.length) notices.push('No active listing (sold out or not stocked): '+data.no_active_listing_stores.join(', ')); if (data.unavailable_stores.length) notices.push('Set not listed: '+data.unavailable_stores.join(', ')); if (data.failed_stores.length) notices.push('Could not check: '+data.failed_stores.join(', ')); if (notices.length) comparison.append(text('p',notices.join(' · '),'notice')); }
+function renderFamilyComparison(data) { highlightSelection(); clear(comparison); const head=document.createElement('div'); head.className='comparison-head'; const copy=document.createElement('div'); copy.append(text('h2','Lowest prices across printings'),text('p',data.selected_card.english_name+' · '+data.print_count+' verified Japanese printings')); const back=document.createElement('button'); back.textContent='Back to selected print'; back.addEventListener('click',()=>compare(data.selected_card.id)); head.append(copy,back); comparison.append(head); if (!data.offers.length) comparison.append(text('p','No store currently has a listed offer for these verified printings.','notice')); for (const offer of data.offers) comparison.append(offerRow(offer,offer.card.display_code)); }
 async function compare(id, refresh=false) { selectedId=id; highlightSelection(); setStatus('Checking stores…'); comparison.replaceChildren(text('p','Comparing exact-print listings…','notice')); try { const data=await readJson(await fetch('/api/compare?id='+encodeURIComponent(id)+(refresh?'&refresh=1':''))); renderComparison(data); setStatus(''); } catch (error) { clear(comparison); setStatus(error.message,true); } }
+async function compareFamily(id, refresh=false) { selectedId=id; highlightSelection(); setStatus('Checking every verified printing…'); comparison.replaceChildren(text('p','Comparing exact-print listings across verified reprints…','notice')); try { const data=await readJson(await fetch('/api/compare-family?id='+encodeURIComponent(id)+(refresh?'&refresh=1':''))); renderFamilyComparison(data); setStatus(''); } catch (error) { clear(comparison); setStatus(error.message,true); } }
 form.addEventListener('submit',event=>{ event.preventDefault(); search(); }); document.querySelectorAll('[data-query]').forEach(button=>button.addEventListener('click',()=>search(button.dataset.query)));
 </script></body></html>"""

@@ -268,3 +268,20 @@ class ComparisonResult:
     no_active_listing_stores: tuple[str, ...] = ()
     unavailable_stores: tuple[str, ...] = ()
     failed_stores: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class FamilyOffer:
+    """One exact-print store offer in a verified card-family comparison."""
+
+    card: CardPrint
+    offer: StoreOffer
+
+
+@dataclass(frozen=True, slots=True)
+class CardFamilyComparisonResult:
+    """Aggregated offers for Japanese reprints of one verified card identity."""
+
+    selected_card: CardPrint
+    printings: tuple[CardPrint, ...]
+    offers: tuple[FamilyOffer, ...]
