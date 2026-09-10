@@ -4,6 +4,10 @@ A local-first Cardfight!! Vanguard price-comparison Telegram bot. Users search
 by English card name (including partial names and reasonable typos), choose a
 matching print, and receive offers from the enabled Japanese stores.
 
+The current and planned product requirements are recorded in
+[REQUIREMENTS.md](REQUIREMENTS.md), including promo serial-number search across
+all store connectors.
+
 It does not translate while a user waits. The English card mapping lives in a
 local SQLite database and store connectors use the selected print identifier
 only after the user has chosen it.
