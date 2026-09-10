@@ -80,6 +80,35 @@ class JapaneseCardPrint:
 
 
 @dataclass(frozen=True, slots=True)
+class PromoCatalogueEntry:
+    """A retailer's verified location for one Japanese promo printing.
+
+    It deliberately contains no English card name. Retailer discovery and
+    canonical Japanese-card identity are separate from the later name-mapping
+    review process.
+    """
+
+    store_id: str
+    page_slug: str
+    set_code: str
+    collector_number: str
+    japanese_name: str
+    listing_url: str
+    source_page_url: str
+    product_id: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "store_id", self.store_id.strip().lower())
+        object.__setattr__(self, "page_slug", self.page_slug.strip().lower())
+        object.__setattr__(self, "set_code", normalise_set_code(self.set_code))
+        object.__setattr__(self, "collector_number", normalise_collector_number(self.collector_number))
+        object.__setattr__(self, "japanese_name", self.japanese_name.strip())
+        object.__setattr__(self, "listing_url", self.listing_url.strip())
+        object.__setattr__(self, "source_page_url", self.source_page_url.strip())
+        object.__setattr__(self, "product_id", self.product_id.strip() if self.product_id else None)
+
+
+@dataclass(frozen=True, slots=True)
 class EnglishNameMapping:
     """A reviewed English name for an official Japanese card print."""
 

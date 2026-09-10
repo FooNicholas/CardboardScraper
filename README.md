@@ -156,6 +156,20 @@ Quick Shield printings are deliberately held without English search mappings
 until their shared utility-card workflow is resumed. It never assumes an
 English and Japanese D-PR serial with the same number are the same card.
 
+### Japanese promo catalogue locations
+
+Store pages are a source of Japanese serials and listing locations, not English
+names. Import a specific Yuyu-Tei D-Promo page locally with:
+
+```sh
+scraperbot-import-yuyutei-promos --page dpromo-1200
+```
+
+The import is resumable per page. Re-run it with `--refresh` when a page's
+listings need to be checked again. It records the canonical Japanese serial,
+Japanese name, page slug, retailer product ID, and product URL without adding
+or changing an English search mapping.
+
 When Bushiroad later publishes an English print, the official-English importer
 always preserves that name rather than replacing it with a Fandom mapping.
 There is still no translation request in the Telegram price path.

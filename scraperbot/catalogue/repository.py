@@ -10,7 +10,15 @@ from typing import Iterable
 
 from rapidfuzz import fuzz
 
-from scraperbot.models import CardPrint, EnglishNameMapping, JapaneseCardPrint, normalise_set_code, normalise_text
+from scraperbot.models import (
+    CardPrint,
+    EnglishNameMapping,
+    JapaneseCardPrint,
+    PromoCatalogueEntry,
+    normalise_collector_number,
+    normalise_set_code,
+    normalise_text,
+)
 
 
 PROMO_PRINT_SET_CODES = frozenset({"DPR", "CP"})
@@ -78,6 +86,32 @@ CREATE TABLE IF NOT EXISTS japanese_prints (
 );
 
 CREATE INDEX IF NOT EXISTS idx_japanese_prints_set ON japanese_prints(set_code);
+
+CREATE TABLE IF NOT EXISTS promo_catalogue_entries (
+    store_id TEXT NOT NULL,
+    page_slug TEXT NOT NULL,
+    set_code TEXT NOT NULL,
+    collector_number TEXT NOT NULL,
+    japanese_name TEXT NOT NULL,
+    listing_url TEXT NOT NULL,
+    source_page_url TEXT NOT NULL,
+    product_id TEXT,
+    first_imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (store_id, set_code, collector_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_promo_catalogue_entries_page
+ON promo_catalogue_entries(store_id, page_slug);
+
+CREATE TABLE IF NOT EXISTS promo_catalogue_imports (
+    store_id TEXT NOT NULL,
+    page_slug TEXT NOT NULL,
+    source_page_url TEXT NOT NULL,
+    entry_count INTEGER NOT NULL,
+    completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (store_id, page_slug)
+);
 
 CREATE TABLE IF NOT EXISTS japanese_expansion_imports (
     expansion_id INTEGER PRIMARY KEY,
@@ -519,6 +553,97 @@ class CatalogueRepository:
             )
             for row in rows
         ]
+
+    def upsert_promo_catalogue_entries(self, entries: Iterable[PromoCatalogueEntry]) -> int:
+        """Persist retailer promo locations without creating card-name mappings."""
+        imported = 0
+        try:
+            for entry in entries:
+                self.connection.execute(
+                    """
+                    INSERT INTO promo_catalogue_entries (
+                        store_id, page_slug, set_code, collector_number, japanese_name,
+                        listing_url, source_page_url, product_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(store_id, set_code, collector_number) DO UPDATE SET
+                        page_slug = excluded.page_slug,
+                        japanese_name = excluded.japanese_name,
+                        listing_url = excluded.listing_url,
+                        source_page_url = excluded.source_page_url,
+                        product_id = excluded.product_id,
+                        last_seen_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        entry.store_id,
+                        entry.page_slug,
+                        entry.set_code,
+                        entry.collector_number,
+                        entry.japanese_name,
+                        entry.listing_url,
+                        entry.source_page_url,
+                        entry.product_id,
+                    ),
+                )
+                imported += 1
+        except Exception:
+            self.connection.rollback()
+            raise
+        self.connection.commit()
+        return imported
+
+    def has_promo_catalogue_page(self, store_id: str, page_slug: str) -> bool:
+        return self.connection.execute(
+            """
+            SELECT 1 FROM promo_catalogue_imports
+            WHERE store_id = ? AND page_slug = ?
+            """,
+            (store_id.strip().lower(), page_slug.strip().lower()),
+        ).fetchone() is not None
+
+    def mark_promo_catalogue_page_imported(
+        self, store_id: str, page_slug: str, source_page_url: str, entry_count: int
+    ) -> None:
+        """Checkpoint a completed page only after all its entries are stored."""
+        self.connection.execute(
+            """
+            INSERT INTO promo_catalogue_imports (store_id, page_slug, source_page_url, entry_count)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(store_id, page_slug) DO UPDATE SET
+                source_page_url = excluded.source_page_url,
+                entry_count = excluded.entry_count,
+                completed_at = CURRENT_TIMESTAMP
+            """,
+            (store_id.strip().lower(), page_slug.strip().lower(), source_page_url, entry_count),
+        )
+        self.connection.commit()
+
+    def promo_catalogue_entry(
+        self, store_id: str, set_code: str, collector_number: str
+    ) -> PromoCatalogueEntry | None:
+        """Look up a retailer location for a selected Japanese promo print."""
+        row = self.connection.execute(
+            """
+            SELECT * FROM promo_catalogue_entries
+            WHERE store_id = ? AND set_code = ? AND collector_number = ?
+            """,
+            (
+                store_id.strip().lower(),
+                normalise_set_code(set_code),
+                normalise_collector_number(collector_number),
+            ),
+        ).fetchone()
+        if not row:
+            return None
+        return PromoCatalogueEntry(
+            store_id=row["store_id"],
+            page_slug=row["page_slug"],
+            set_code=row["set_code"],
+            collector_number=row["collector_number"],
+            japanese_name=row["japanese_name"],
+            listing_url=row["listing_url"],
+            source_page_url=row["source_page_url"],
+            product_id=row["product_id"],
+        )
 
     def unambiguous_fandom_name_mappings(self, set_codes: Iterable[str]) -> list[EnglishNameMapping]:
         """Map selected prints from one exact Japanese-name Fandom candidate.
