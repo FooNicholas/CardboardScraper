@@ -56,9 +56,14 @@
   prints are currently attached to the wrong English search name. The report
   at [Card Rush product 37326](https://www.cardrush-vanguard.jp/product/37326)
   is the reference example. This can make an English-name search select the
-  wrong Japanese promo and return prices for that wrong print. Root cause is
-  not yet confirmed; existing promo mappings must be audited before bulk promo
-  ingestion or user-facing serial search is released.
+  wrong Japanese promo and return prices for that wrong print. The root cause
+  is confirmed: the current official-English linker treats equal `D-PR` serial
+  numbers in the Japanese and English databases as identical cards. Promo
+  serial sequences are regional and not equivalent. For example, Japanese
+  `D-PR/953` is the foil printing of Leuhan, while the English `D-PR/953EN`
+  entry is a different card; the number-only match overwrote Leuhan's name.
+  Existing promo mappings must be audited before bulk promo ingestion or
+  user-facing serial search is released.
 
 ## Implementation plan and outstanding work
 
@@ -66,7 +71,7 @@
 | --- | --- | --- |
 | Core catalogue and comparison | Complete | English fuzzy search, Japanese-print selection, local browser and Telegram interfaces, and exact-print comparisons from Yuyu-Tei, BigWeb, Card Rush, and VanHappy. |
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
-| Promo mapping audit and correction | Planned — highest priority | Reproduce BUG-PR-001, audit existing D-PR mappings against explicit evidence, quarantine or correct bad mappings, and add regression fixtures before expanding promo coverage. |
+| Promo mapping audit and correction | Planned — highest priority | Remove invalid cross-region equal-serial mappings, remap D-PR prints from exact Japanese-name evidence, quarantine conflicts, and add regression fixtures before expanding promo coverage. |
 | Promo catalogue ingestion | Planned | Crawl Yuyu-Tei D Promo catalogue pages, including their serial ranges and product locations, into a resumable local import. |
 | Promo identity enrichment | Planned | Match imported promo prints to official Japanese data, explicit Fandom cross-print links, and an editable review queue for unresolved names. |
 | One-time translation review | Planned | Translate only unresolved playable or Energy names during import; persist the approved English search name and provenance locally. No user search may trigger a translation. |
@@ -77,30 +82,46 @@
 
 ### Planned promo implementation sequence
 
-1. Reproduce and correct BUG-PR-001. Audit the existing D-PR English mappings
-   against the Japanese serial and an explicit source. Mark mappings as
-   verified, provisional, or rejected; do not propagate a rejected or
-   unverified mapping to another print.
-2. Add regression tests for corrected and rejected D-PR mappings, including a
-   Card Rush exact-print fixture for the reported product. The audit must pass
-   before any bulk promo import writes user-searchable English names.
-3. Add a `promo_catalogue_entries` import store keyed by Japanese serial. Save
+1. Stop using identical serial numbers as cross-region identity evidence for
+   `D-PR` (and other promo/campaign serial families). Exact printed-reference
+   linking remains valid only for release families whose Japanese and English
+   numbering is explicitly known to be shared.
+2. Rebuild the affected Japanese promo mappings after removing the invalid
+   equal-serial official-English links. `D-PR/953` is the first regression
+   case: it must resolve to the Leuhan English name, not the English card that
+   happens to be numbered `D-PR/953EN`.
+3. Build a canonical Japanese-name mapping index from the existing Fandom
+   English-to-Japanese mappings and other reviewed sources. For each exact
+   Japanese name, collect its distinct English-name candidates and their
+   provenance.
+4. Map a promo foil automatically only when its exact Japanese name has one
+   verified English candidate. This maps a promo foil to its main-set card name
+   regardless of unrelated Japanese and English promo serials.
+5. Put ambiguous, missing, or conflicting Japanese names into a review queue.
+   A one-time translation is allowed only for these entries; save the approved
+   English name, source, reviewer decision, and timestamp. Never overwrite a
+   reviewed mapping merely because another region reuses its serial number.
+6. Add regression tests for corrected, rejected, and ambiguous D-PR mappings,
+   including a Card Rush exact-print fixture for the reported product. The
+   audit must pass before any bulk promo import writes user-searchable English
+   names.
+7. Add a `promo_catalogue_entries` import store keyed by Japanese serial. Save
    the Yuyu-Tei catalogue page and listing URL separately from the canonical
    card identity so another retailer can use the same print.
-4. Add an import command for a specified promo range, starting with pages such
+8. Add an import command for a specified promo range, starting with pages such
    as `dpromo-1200`. It must resume safely, retain Energy and playable items,
    and produce an unresolved-name report rather than discarding entries.
-5. Enrich each promo with official Japanese data and explicit cross-print
+9. Enrich each promo with official Japanese data and explicit cross-print
    evidence. Send only still-unresolved names to the one-time translation
    review queue.
-6. Add Japanese serial normalisation and exact lookup to the catalogue search
+10. Add Japanese serial normalisation and exact lookup to the catalogue search
    API, the Telegram handler, and the browser UI. Formatted serials resolve
    directly; ambiguous bare numbers prompt for a set family. English serials
    are used only by the import/mapping layer and never appear in user results.
-7. Add connector metadata for retailer-specific promo locations. Yuyu-Tei may
+11. Add connector metadata for retailer-specific promo locations. Yuyu-Tei may
    require a page such as `dpromo-1200`; Card Rush, VanHappy, BigWeb, and later
    stores still receive the same canonical `D-PR/1247` reference.
-8. Backfill promo ranges incrementally, verify exact-print offers and stock
+12. Backfill promo ranges incrementally, verify exact-print offers and stock
    indicators against live listings, then mark each range complete in the
    import checkpoint.
 
