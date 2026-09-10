@@ -18,14 +18,11 @@
 - Exact serial-number search is required for every print, especially promos.
   It must accept conventional forms such as `D-PR/1247`, `DPR1247`, and
   `D-PR 1247`.
-- Serial search has three explicit modes: **Auto**, **Japanese print**, and
-  **English print**. Auto searches both serial systems and presents the region
-  and canonical Japanese store print before comparison; the regional modes
-  restrict results to that printed serial system.
-- The browser and Telegram interfaces must make the selected mode visible and
-  retain it while a user refines a search. Results must display both linked
-  serials when a cross-print relationship is known, for example Japanese
-  `D-PR/1247` and English `DZ-BT12/Re07EN`.
+- Serial search is Japanese-print-only. It resolves the Japanese serial used
+  by the stores and returns only that Japanese listing.
+- English serials are internal cross-print evidence used to record an English
+  search name against the Japanese print. They are not a user-facing search
+  mode, a selectable result, or a displayed serial.
 - Serial-number search is store-independent: it selects the canonical print
   before querying Yuyu-Tei, Card Rush, VanHappy, BigWeb, or any later store.
   A serial must never be tied to only the retailer that supplied its catalogue
@@ -62,7 +59,7 @@
 | Promo catalogue ingestion | Planned | Crawl Yuyu-Tei D Promo catalogue pages, including their serial ranges and product locations, into a resumable local import. |
 | Promo identity enrichment | Planned | Match imported promo prints to official Japanese data, explicit Fandom cross-print links, and an editable review queue for unresolved names. |
 | One-time translation review | Planned | Translate only unresolved playable or Energy names during import; persist the approved English search name and provenance locally. No user search may trigger a translation. |
-| Serial-number search | Planned | Add Auto, Japanese-print, and English-print search modes; exact reference lookup; ambiguity handling for bare numbers; and both linked serials on results. |
+| Serial-number search | Planned | Add Japanese-print serial normalisation, exact reference lookup, ambiguity handling for bare numbers, and Japanese serial result labels. English serials remain internal mapping data only. |
 | Multi-store promo lookup | Planned | Pass the selected canonical serial to every connector, use each store's catalogue location when needed, and verify the exact reference before showing an offer. |
 | Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
 | Dorasuta | Deferred | Do not add the Dorasuta connector at this time. |
@@ -78,11 +75,10 @@
 3. Enrich each promo with official Japanese data and explicit cross-print
    evidence. Send only still-unresolved names to the one-time translation
    review queue.
-4. Add serial normalisation and exact lookup to the catalogue search API, the
-   Telegram handler, and the browser UI. Provide Auto, Japanese-print, and
-   English-print modes. Formatted serials resolve directly; ambiguous bare
-   numbers prompt for a set family. Auto mode shows both serials and requires
-   a selection if they identify more than one cross-print group.
+4. Add Japanese serial normalisation and exact lookup to the catalogue search
+   API, the Telegram handler, and the browser UI. Formatted serials resolve
+   directly; ambiguous bare numbers prompt for a set family. English serials
+   are used only by the import/mapping layer and never appear in user results.
 5. Add connector metadata for retailer-specific promo locations. Yuyu-Tei may
    require a page such as `dpromo-1200`; Card Rush, VanHappy, BigWeb, and later
    stores still receive the same canonical `D-PR/1247` reference.
