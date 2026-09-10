@@ -28,8 +28,8 @@ def offer(store: str, price: int, availability: Availability = Availability.IN_S
         store_id=store,
         store_name=store.title(),
         raw_name="raw",
-        price_yen=price if availability == Availability.IN_STOCK else None,
-        price_display=f"¥{price:,}" if availability == Availability.IN_STOCK else "Sold out",
+        price_yen=price,
+        price_display=f"¥{price:,}",
         availability=availability,
         listing_url=f"https://example.test/{store}",
         match_confidence=MatchConfidence.EXACT_PRINT,
@@ -67,3 +67,12 @@ def test_comparison_reports_a_store_with_no_active_listing() -> None:
     result = asyncio.run(service.compare(CARD))
     assert result.no_active_listing_stores == ("Empty",)
     assert "sold out or not stocked" in format_comparison(result)
+
+
+def test_comparison_labels_an_out_of_stock_price() -> None:
+    result = asyncio.run(
+        ComparisonService([FixedConnector("store", [offer("store", 980, Availability.SOLD_OUT)])]).compare(CARD)
+    )
+    rendered = format_comparison(result)
+    assert "¥980" in rendered
+    assert "OOS" in rendered

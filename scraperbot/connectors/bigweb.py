@@ -112,7 +112,7 @@ class BigWebConnector(StoreConnector):
             if not references_card(card, reference):
                 continue
             sold_out = bool(item.get("is_sold_out")) or int(item.get("stock_count") or 0) <= 0
-            price = int(item["price"]) if not sold_out and item.get("price") is not None else None
+            price = int(item["price"]) if item.get("price") is not None else None
             condition = ((item.get("condition") or {}).get("name") or "").strip() or None
             offers.append(
                 StoreOffer(
@@ -120,7 +120,7 @@ class BigWebConnector(StoreConnector):
                     store_name=cls.store_name,
                     raw_name=str(item.get("name", "")),
                     price_yen=price,
-                    price_display=f"¥{price:,}" if price is not None else "Sold out",
+                    price_display=f"¥{price:,}" if price is not None else "Price unavailable",
                     availability=Availability.SOLD_OUT if sold_out else Availability.IN_STOCK,
                     listing_url=f"https://www.bigweb.co.jp/ja/products/vg/cardViewer/{item['id']}",
                     match_confidence=MatchConfidence.EXACT_PRINT,

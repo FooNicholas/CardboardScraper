@@ -66,8 +66,8 @@ def test_yuyutei_marks_an_explicit_zero_stock_listing_sold_out() -> None:
     """
     offer = YuyuTeiConnector.parse_html(CARD, html)[0]
     assert offer.availability == Availability.SOLD_OUT
-    assert offer.price_display == "Sold out"
-    assert offer.price_yen is None
+    assert offer.price_display == "¥1,280"
+    assert offer.price_yen == 1280
 
 
 def test_yuyutei_marks_a_circle_stock_indicator_in_stock() -> None:
@@ -90,3 +90,34 @@ def test_yuyutei_does_not_label_an_unknown_stock_state_sold_out() -> None:
     assert offer.availability == Availability.UNKNOWN
     assert offer.price_yen == 420
     assert offer.price_display == "¥420"
+
+
+def test_yuyutei_marks_a_cross_stock_indicator_out_of_stock_and_keeps_its_price() -> None:
+    html = """
+    <div class="col-md"><div class="card-product sold-out"><span>DZ-BT16/FFR02</span>
+    <h4>エグザサベイト・ドラゴン</h4><strong>980 円</strong>
+    <label class="cart_sell_zaiko">在庫 : ×</label></div></div>
+    """
+    offer = YuyuTeiConnector.parse_html(CARD, html)[0]
+    assert offer.availability == Availability.SOLD_OUT
+    assert offer.price_yen == 980
+    assert offer.price_display == "¥980"
+
+
+def test_bigweb_keeps_the_displayed_price_for_an_out_of_stock_print() -> None:
+    offers = BigWebConnector.parse_items(
+        CARD,
+        [
+            {
+                "id": 3576107,
+                "name": "エグザサベイト・ドラゴン",
+                "comment": "DZ-BT16/FFR02",
+                "stock_count": 0,
+                "is_sold_out": True,
+                "price": 980,
+            }
+        ],
+    )
+    assert offers[0].availability == Availability.SOLD_OUT
+    assert offers[0].price_yen == 980
+    assert offers[0].price_display == "¥980"

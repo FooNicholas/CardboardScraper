@@ -56,14 +56,15 @@ class YuyuTeiConnector(StoreConnector):
                 # Current sell pages use a circle rather than a numeric stock
                 # count. It means the card can be added to the cart.
                 availability = Availability.IN_STOCK
-            elif any(marker in item_text for marker in ("在庫なし", "売り切れ", "SOLD OUT")):
+            elif (
+                any(marker in stock_label_text for marker in ("×", "✕", "✖"))
+                or item.select_one(".sold-out") is not None
+                or any(marker in item_text for marker in ("在庫なし", "売り切れ", "SOLD OUT"))
+            ):
                 availability = Availability.SOLD_OUT
             else:
                 availability = Availability.UNKNOWN
-            if availability == Availability.SOLD_OUT:
-                price = None
-                price_display = "Sold out"
-            elif price is not None:
+            if price is not None:
                 price_display = f"¥{price:,}"
             else:
                 price_display = "Price unavailable"
