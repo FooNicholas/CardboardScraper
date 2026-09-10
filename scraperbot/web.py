@@ -176,18 +176,18 @@ def serve(application: LocalPriceCheckWeb, *, host: str = "127.0.0.1", port: int
     """Serve the UI locally. The default address is inaccessible from a network."""
     handler = type("BoundLocalWebRequestHandler", (LocalWebRequestHandler,), {"application": application})
     server = HTTPServer((host, port), handler)
-    print(f"PriceCheck is running at http://{host}:{port}")
+    print(f"JP Price Checker is running at http://{host}:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nPriceCheck stopped.")
+        print("\nJP Price Checker stopped.")
     finally:
         server.server_close()
         application.catalogue.close()
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the local PriceCheck browser interface.")
+    parser = argparse.ArgumentParser(description="Run the local JP Price Checker browser interface.")
     parser.add_argument("--host", default="127.0.0.1", help="Bind address (default: local computer only)")
     parser.add_argument("--port", type=int, default=8787, help="Local port (default: 8787)")
     args = parser.parse_args()
@@ -201,21 +201,58 @@ INDEX_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PriceCheck</title>
+  <title>JP Price Checker</title>
   <style>
-    :root { color-scheme: dark; --ink:#f7f7fb; --muted:#a8acc0; --panel:#171927; --line:#2b2e42; --accent:#ad8cff; --accent-2:#66e3c4; --danger:#ff9b9b; }
-    * { box-sizing:border-box } body { margin:0; min-height:100vh; background:radial-gradient(circle at 12% 0%, #30225a, transparent 37rem), #0d0e17; color:var(--ink); font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    main { width:min(1180px, calc(100% - 32px)); margin:0 auto; padding:64px 0 80px; } h1 { margin:0; font-size:clamp(2.2rem,7vw,4.4rem); letter-spacing:-.06em; } .eyebrow { color:var(--accent-2); font-weight:700; letter-spacing:.12em; font-size:.76rem; text-transform:uppercase; margin-bottom:10px; } .intro { max-width:610px; color:var(--muted); margin:14px 0 32px; } .workspace { display:grid; grid-template-columns:minmax(290px,.8fr) minmax(0,1.4fr); gap:32px; align-items:start; margin-top:16px; } .print-panel,.price-panel { min-width:0; } .price-panel { position:sticky; top:26px; min-height:180px; } .panel-label { color:var(--muted); font-size:.78rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin:0 0 10px; }
-    form { display:flex; gap:10px; background:var(--panel); border:1px solid var(--line); padding:10px; border-radius:16px; box-shadow:0 18px 60px #0005; } input { min-width:0; flex:1; border:0; border-radius:10px; color:var(--ink); background:#0e101a; padding:14px 16px; font:inherit; outline:none; } input:focus { box-shadow:0 0 0 2px var(--accent); } button { border:0; border-radius:10px; padding:12px 18px; color:#150d2c; background:var(--accent); font:700 15px inherit; cursor:pointer; } button:hover { filter:brightness(1.1) } button:disabled { cursor:wait; opacity:.6; }
-    .hint { color:var(--muted); font-size:.88rem; margin:12px 0 18px; } .hint button { color:var(--muted); background:transparent; border:1px solid var(--line); padding:4px 9px; margin-left:5px; font-size:.8rem; }
-    #status { min-height:1.5em; color:var(--muted); margin-bottom:12px; } #status.error { color:var(--danger) } .result-list { display:grid; gap:10px; } .card { width:100%; text-align:left; color:var(--ink); background:var(--panel); border:1px solid var(--line); padding:17px; border-radius:14px; display:flex; gap:16px; align-items:center; } .card:hover { border-color:var(--accent); } .card.active { border-color:var(--accent-2); background:linear-gradient(115deg,#20273b,#1a1b2d); box-shadow:0 0 0 1px #66e3c440; } .card.active .code { color:var(--accent-2); } .card h2 { font-size:1.05rem; margin:0 0 4px; } .card p { margin:0; color:var(--muted); font-size:.9rem; } .card .code { margin-left:auto; text-align:right; color:var(--accent-2); font-size:.84rem; white-space:nowrap; }
-    #comparison { margin-top:28px; } .comparison-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; border-bottom:1px solid var(--line); padding-bottom:13px; margin-bottom:12px; } .comparison-head h2 { margin:0; font-size:1.35rem; } .comparison-head p { margin:3px 0 0; color:var(--muted); } .comparison-head button { background:transparent; color:var(--muted); border:1px solid var(--line); padding:7px 10px; font-size:.8rem; }
-    .offer { display:grid; grid-template-columns:minmax(110px,1fr) auto auto; gap:14px; align-items:center; padding:14px 0; border-bottom:1px solid var(--line); } .offer a { color:var(--ink); font-weight:700; text-decoration:none; } .offer a:hover { color:var(--accent-2) } .offer small { display:block; color:var(--muted); } .price { font-weight:800; color:var(--accent-2); } .sold { color:var(--muted); } .tag { color:var(--muted); font-size:.75rem; text-align:right; } .notice { color:var(--muted); font-size:.9rem; margin:12px 0; }
-    @media (max-width:780px) { main { padding-top:42px } .workspace { grid-template-columns:1fr; gap:24px; } .price-panel { position:static; } form { padding:7px } button { padding:11px 13px } .card { align-items:flex-start } .card .code { white-space:normal } .offer { grid-template-columns:1fr auto; } .tag { grid-column:1 / -1; text-align:left; } }
+    :root { color-scheme:light; --paper:#f7f3eb; --paper-deep:#eee7dc; --surface:#fffdf9; --ink:#2e2925; --muted:#716960; --line:#ded4c6; --accent:#c9662d; --accent-hover:#aa5222; --accent-soft:#fff0e6; --danger:#ad3c32; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at 8% 0%, #fffdf9 0, transparent 31rem), linear-gradient(135deg,var(--paper) 0%,var(--paper-deep) 100%); color:var(--ink); font:16px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:70px 0 88px; }
+    h1 { margin:0; font-family:ui-serif,Georgia,Cambria,"Times New Roman",serif; font-size:clamp(2.5rem,7vw,4.8rem); font-weight:600; letter-spacing:-.065em; line-height:1; }
+    .eyebrow { color:var(--accent); font-weight:750; letter-spacing:.12em; font-size:.74rem; text-transform:uppercase; margin-bottom:13px; }
+    .intro { max-width:630px; color:var(--muted); margin:18px 0 34px; }
+    .workspace { display:grid; grid-template-columns:minmax(290px,.8fr) minmax(0,1.4fr); gap:40px; align-items:start; margin-top:22px; }
+    .print-panel,.price-panel { min-width:0; }
+    .price-panel { position:sticky; top:26px; min-height:180px; }
+    .panel-label { color:var(--muted); font-size:.74rem; font-weight:750; letter-spacing:.11em; text-transform:uppercase; margin:0 0 10px; }
+    form { display:flex; gap:10px; background:var(--surface); border:1px solid var(--line); padding:8px; border-radius:15px; box-shadow:0 12px 32px #5e433a12; }
+    input { min-width:0; flex:1; border:0; border-radius:10px; color:var(--ink); background:transparent; padding:14px 15px; font:inherit; outline:none; }
+    input::placeholder { color:#978d82; }
+    input:focus { box-shadow:inset 0 0 0 2px #e9a17c; }
+    button { border:1px solid transparent; border-radius:10px; padding:12px 18px; color:#fffaf5; background:var(--accent); font:750 15px inherit; cursor:pointer; transition:background .16s ease,border-color .16s ease,transform .16s ease; }
+    button:hover { background:var(--accent-hover); transform:translateY(-1px); }
+    button:disabled { cursor:wait; opacity:.6; transform:none; }
+    .hint { color:var(--muted); font-size:.88rem; margin:12px 0 20px; }
+    .hint button,.comparison-head button { color:var(--muted); background:transparent; border-color:var(--line); padding:5px 9px; margin-left:5px; font-size:.8rem; }
+    .hint button:hover,.comparison-head button:hover { color:var(--accent-hover); background:var(--accent-soft); border-color:#e6ad8b; }
+    #status { min-height:1.5em; color:var(--muted); margin-bottom:12px; }
+    #status.error { color:var(--danger); }
+    .result-list { display:grid; gap:10px; }
+    .card { width:100%; text-align:left; color:var(--ink); background:var(--surface); border:1px solid var(--line); padding:17px; border-radius:13px; display:flex; gap:16px; align-items:center; box-shadow:0 2px 5px #5e433a08; }
+    .card:hover { border-color:#df8f64; background:#fffaf5; }
+    .card.active { border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 2px #e8a47f55; }
+    .card.active .code { color:var(--accent-hover); }
+    .card h2 { font-size:1.05rem; margin:0 0 4px; }
+    .card p { margin:0; color:var(--muted); font-size:.9rem; }
+    .card .code { margin-left:auto; text-align:right; color:var(--accent); font-size:.84rem; white-space:nowrap; }
+    #comparison { margin-top:28px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px; box-shadow:0 2px 5px #5e433a08; }
+    #comparison:empty { display:none; }
+    .comparison-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:3px; }
+    .comparison-head h2 { margin:0; font-size:1.35rem; }
+    .comparison-head p { margin:3px 0 0; color:var(--muted); }
+    .comparison-head button { flex:none; }
+    .offer { display:grid; grid-template-columns:minmax(110px,1fr) auto auto; gap:14px; align-items:center; padding:14px 0; border-bottom:1px solid var(--line); }
+    .offer a { color:var(--ink); font-weight:750; text-decoration:none; }
+    .offer a:hover { color:var(--accent-hover); }
+    .offer small { display:block; color:var(--muted); }
+    .price { font-weight:800; color:var(--accent-hover); }
+    .sold { color:var(--muted); }
+    .tag { color:var(--muted); font-size:.75rem; text-align:right; }
+    .notice { color:var(--muted); font-size:.9rem; margin:12px 0; }
+    @media (max-width:780px) { main { padding-top:44px; } .workspace { grid-template-columns:1fr; gap:24px; } .price-panel { position:static; } form { padding:7px; } button { padding:11px 13px; } .card { align-items:flex-start; } .card .code { white-space:normal; } #comparison { margin-top:18px; } .offer { grid-template-columns:1fr auto; } .tag { grid-column:1 / -1; text-align:left; } }
   </style>
 </head>
 <body><main>
-  <div class="eyebrow">Local card price comparison</div><h1>PriceCheck</h1>
+  <div class="eyebrow">Local card price comparison</div><h1>JP Price Checker</h1>
   <p class="intro">Search by English card name—even partially spelled—and choose the exact Japanese-market printing before checking stores.</p>
   <form id="search-form"><input id="query" type="search" maxlength="120" autocomplete="off" placeholder="Try: Youthberk, Haughty Peerage FFR" autofocus><button id="search-button">Search</button></form>
   <div class="hint">Optional rarity at the end: <button type="button" data-query="Youthberk FFR">Youthberk FFR</button><button type="button" data-query="Chronojet">Chronojet</button></div>

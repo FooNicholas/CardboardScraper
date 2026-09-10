@@ -1,4 +1,4 @@
-# ScraperBot
+# JP Price Checker
 
 A local-first Cardfight!! Vanguard price-comparison Telegram bot. Users search
 by English card name (including partial names and reasonable typos), choose a
