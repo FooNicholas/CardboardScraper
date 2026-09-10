@@ -6,6 +6,9 @@
 - Catalogue only two item types: playable cards and Energy cards.
 - Keep each physical printing distinct by its printed set code and collector
   number, even when the Japanese and English releases use different codes.
+- Treat D-PR/CP and every D/DZ Special Series (`D-SS`/`DZ-SS`) set code as
+  region-specific. Matching Japanese and English set/collector values are not
+  card identity evidence and must never create an automatic name mapping.
 - Keep finish separate from rarity. Capture an explicitly shown foil/holo
   treatment such as `H仕様` for `PR 焔の巫女 シンディ(H仕様)`, retain the
   retailer's original annotation, and expose a normalised `holo` flag. Do not
@@ -64,17 +67,18 @@
 
 ## Known defects
 
-- **BUG-PR-001 — Corrected for the current local D-PR catalogue.** The report
-  at [Card Rush product 37326](https://www.cardrush-vanguard.jp/product/37326)
-  was caused by the official-English linker treating equal Japanese and English
-  `D-PR` serials as identical. They are independent regional sequences:
-  Japanese `D-PR/953` is the Leuhan foil, while English `D-PR/953EN` is a
-  different card. D-PR and campaign-print official English records now live in
-  an internal reference store; they cannot overwrite or appear as Japanese
-  search results. The repair rebuilt the local D-PR catalogue from direct
-  Fandom evidence and unambiguous exact-Japanese-name matches. Remaining
-  unmapped promos are withheld from English-name search until reviewed, rather
-  than being given an unsafe match.
+- **BUG-REGION-001 — Corrected for the current local regional catalogue.** The
+  official-English linker previously treated equal Japanese and English serials
+  as identical. This first caused the reported `D-PR/953` error and also made
+  Japanese `DZ-SS10/018` (`ケッパー・コンパニオン`, Caper Companion) appear
+  as the unrelated English `Vital Blaze Blast`. D-PR/CP and D/DZ Special
+  Series product sequences are now region-specific. Their English official
+  records are stored only as internal references; they cannot overwrite or
+  appear as Japanese search results. The local repair rebuilt all 27 imported
+  D/DZ Special Series sets (1,736 Japanese prints) and the current D-PR/CP
+  families from the matching Fandom Japanese-set pages. Remaining unmapped
+  promos are withheld from English-name search until reviewed, rather than
+  being given an unsafe match.
 
 ## Implementation plan and outstanding work
 
@@ -83,6 +87,7 @@
 | Core catalogue and comparison | Complete | English fuzzy search, Japanese-print selection, local browser and Telegram interfaces, and exact-print comparisons from Yuyu-Tei, BigWeb, Card Rush, and VanHappy. |
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
 | Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official promo links are blocked and archived as internal English references. The local D-PR repair cleared 1,694 prior search records, archived 1,103 English references, and restored direct Fandom and exact Japanese-name matches. Energy, Energy Generator, and Quick Shield mappings are explicitly on hold. `D-PR/953` → Leuhan is covered by regression tests. |
+| Special Series regional mapping audit | Complete | All imported D/DZ Special Series codes are region-specific like D-PR/CP. The repair rebuilt 1,736 Japanese prints across 27 D-SS/DZ-SS sets from their Fandom Japanese-set pages, with no remaining equal-serial official-English mappings. `DZ-SS10/018` now resolves to Caper Companion, never Vital Blaze Blast. |
 | Promo catalogue ingestion | Complete for current Yuyu-Tei scan | `scraperbot-import-yuyutei-promos --all` discovered every current numeric D-Promo group and stored 1,444 exact D-PR entries (numeric serials `1–1757`) from actual Yuyu-Tei listings. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. Empty range groups remain eligible for later refresh. |
 | Promo identity enrichment | Review workflow complete — content review pending | `scraperbot-promo-review export` creates a Yuyu-Tei-scoped JSON queue only for actually listed D-PR prints with no safe English mapping. The current queue has 953 playable entries; 81 Yuyu-Tei-listed utility entries are held. `apply` accepts only explicit approved entries and records their source URL. |
 | One-time translation review | Ready for reviewed input | Translate only unresolved playable names during review; enter the approved result and provenance through the local promo review file. Energy, Energy Generator, and Quick Shield remain held. No user search may trigger a translation. |

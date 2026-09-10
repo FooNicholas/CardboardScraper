@@ -26,6 +26,7 @@ from scraperbot.models import (
 
 
 PROMO_PRINT_SET_CODES = frozenset({"DPR", "CP"})
+SPECIAL_SET_CODE_PATTERN = re.compile(r"^(?:D|DZ)SS\d+$")
 
 # These shared-name utility prints remain in the Japanese master while their
 # user-facing search and selection workflow is on hold. Do not add a generic
@@ -37,6 +38,18 @@ HELD_UTILITY_PROMO_NAMES = frozenset(
         "四精織り成す清浄の盾",
     }
 )
+
+
+def is_region_specific_print_set(set_code: str) -> bool:
+    """Whether matching Japanese and English serials are not identity evidence.
+
+    D/DZ promo sequences and D/DZ Special Series products reuse identifiers
+    across regions for different releases.  Their Japanese catalogue entry
+    must therefore never inherit an English name merely because the printed
+    set code and collector number happen to match.
+    """
+    normalised = normalise_set_code(set_code)
+    return normalised in PROMO_PRINT_SET_CODES or bool(SPECIAL_SET_CODE_PATTERN.fullmatch(normalised))
 
 
 SCHEMA = """
@@ -249,17 +262,18 @@ class CatalogueRepository:
                 if not japanese:
                     unmatched += 1
                     continue
-                # Japanese and English promo serials use independent regional
-                # sequences. Never let an equal D-PR/CP reference turn into a
-                # false official match (for example JP D-PR/953 and EN
-                # D-PR/953EN name different cards).
-                is_region_specific_promo = japanese["set_code"] in PROMO_PRINT_SET_CODES
+                # Japanese and English promos and Special Series products use
+                # independent regional sequences. Never let an equal
+                # reference turn into a false official match (for example JP
+                # D-PR/953 and EN D-PR/953EN, or JP DZ-SS10/018 and EN
+                # DZ-SS10/018EN, name different cards).
+                is_region_specific = is_region_specific_print_set(japanese["set_code"])
                 if (
-                    is_region_specific_promo
+                    japanese["set_code"] in PROMO_PRINT_SET_CODES
                     and japanese["japanese_name"] in HELD_UTILITY_PROMO_NAMES
                 ):
                     continue
-                if is_region_specific_promo:
+                if is_region_specific:
                     # An upgrade may encounter legacy official promo records
                     # before the explicit repair command runs. Preserve them
                     # as English-only evidence before this Japanese mapping
@@ -278,7 +292,7 @@ class CatalogueRepository:
                     (japanese["id"],),
                 ).fetchone()
                 if (
-                    not is_region_specific_promo
+                    not is_region_specific
                     and existing_mapping
                     and existing_mapping["mapping_source"] == "official-english"
                     and (
@@ -429,7 +443,6 @@ class CatalogueRepository:
             JOIN card_prints AS c
               ON c.set_code = j.set_code AND c.collector_number = j.collector_number
             WHERE c.source = 'official-english'
-              AND j.set_code NOT IN ('DPR', 'CP')
             ORDER BY j.set_code, j.collector_number, c.rarity
             """
         ).fetchall()
@@ -445,6 +458,7 @@ class CatalogueRepository:
                 status="official",
             )
             for row in rows
+            if not is_region_specific_print_set(row["set_code"])
         ]
 
     def direct_fandom_mappings(self, set_codes: Iterable[str]) -> list[EnglishNameMapping]:
@@ -483,18 +497,21 @@ class CatalogueRepository:
             for row in rows
         ]
 
-    def clear_promo_mappings_for_rebuild(self, set_codes: Iterable[str]) -> tuple[int, int]:
-        """Archive English promo references and clear affected user-facing rows.
+    def clear_region_specific_mappings_for_rebuild(
+        self, set_codes: Iterable[str]
+    ) -> tuple[int, int]:
+        """Archive English references and clear affected Japanese search rows.
 
-        Japanese and English promo serials are region-specific. The English
+        Promos and Special Series product codes are region-specific. English
         rows remain in ``english_print_references`` for mapping evidence but
-        must not occupy the Japanese catalogue key or appear in user searches.
+        must not occupy a Japanese catalogue key or appear in Japanese-price
+        searches.
         """
         wanted = self._normalised_set_codes(set_codes)
         if not wanted:
             return 0, 0
-        if not set(wanted).issubset(PROMO_PRINT_SET_CODES):
-            raise ValueError("Only region-specific promo print families may be rebuilt this way.")
+        if not all(is_region_specific_print_set(set_code) for set_code in wanted):
+            raise ValueError("Only region-specific promo or Special Series print families may be rebuilt.")
         placeholders = ", ".join("?" for _ in wanted)
         try:
             official_rows = self.connection.execute(
@@ -531,6 +548,13 @@ class CatalogueRepository:
             raise
         self.connection.commit()
         return len(official_rows), len(card_ids)
+
+    def clear_promo_mappings_for_rebuild(self, set_codes: Iterable[str]) -> tuple[int, int]:
+        """Backward-compatible promo-only wrapper for the regional rebuild."""
+        wanted = self._normalised_set_codes(set_codes)
+        if not set(wanted).issubset(PROMO_PRINT_SET_CODES):
+            raise ValueError("Only region-specific promo print families may be rebuilt this way.")
+        return self.clear_region_specific_mappings_for_rebuild(wanted)
 
     def unmapped_japanese_prints(self, set_codes: Iterable[str]) -> list[JapaneseCardPrint]:
         """Return unmapped Japanese prints in the requested set families."""
@@ -840,7 +864,7 @@ class CatalogueRepository:
     def _upsert(self, card: CardPrint) -> CardPrint:
         if not card.english_name:
             raise ValueError("A card print requires an English name.")
-        if card.source == "official-english" and card.set_code in PROMO_PRINT_SET_CODES:
+        if card.source == "official-english" and is_region_specific_print_set(card.set_code):
             self._archive_english_card_print(card)
             return card
         aliases_json = json.dumps(card.aliases, ensure_ascii=False)
@@ -1005,6 +1029,16 @@ class CatalogueRepository:
                 ORDER BY j.set_code
                 """
             )
+        ]
+
+    def region_specific_japanese_set_codes(self) -> list[str]:
+        """List imported promo and Special Series families needing regional review."""
+        return [
+            str(row["set_code"])
+            for row in self.connection.execute(
+                "SELECT DISTINCT set_code FROM japanese_prints ORDER BY set_code"
+            )
+            if is_region_specific_print_set(row["set_code"])
         ]
 
     def has_official_expansion(self, expansion_id: int) -> bool:

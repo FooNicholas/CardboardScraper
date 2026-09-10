@@ -121,7 +121,7 @@ scraperbot-import-japanese --all
 scraperbot-link-official-japanese
 scraperbot-map-fandom --all
 scraperbot-derive-japanese-names
-scraperbot-repair-promo-mappings
+scraperbot-repair-regional-mappings
 ```
 
 The first command imports the official Japanese print master: Japanese name,
@@ -133,7 +133,10 @@ names as `provisional` mappings. A base-card Fandom name is safely propagated
 to its parallel prints only when the official Japanese name is identical.
 The bulk Fandom command only visits sets with remaining unmapped Japanese
 prints; it keeps going if a page is unavailable and reports those sets for
-review.
+review. The final repair keeps D-PR/CP and D/DZ Special Series product codes
+region-specific: matching English and Japanese serials are never assumed to be
+the same card, and their Japanese name mappings are rebuilt from Fandom's
+Japanese-set page instead.
 
 Some English reprints correspond to a Japanese promo with a different card
 number. Map those declared relationships for each relevant English set:
