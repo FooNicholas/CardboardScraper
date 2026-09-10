@@ -139,7 +139,7 @@ def test_repository_lists_only_japanese_sets_with_missing_name_mappings(tmp_path
         assert catalogue.unmapped_japanese_set_codes() == ["DBT02"]
 
 
-def test_derivation_uses_one_unambiguous_japanese_name_mapping(tmp_path: Path) -> None:
+def test_derivation_does_not_map_region_specific_promos(tmp_path: Path) -> None:
     with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
         catalogue.import_japanese_many(
             [
@@ -151,9 +151,11 @@ def test_derivation_uses_one_unambiguous_japanese_name_mapping(tmp_path: Path) -
             [EnglishNameMapping("D-BT01", "001", "RRR", "Known Name", "fandom", "https://fandom/base")]
         )
         result = catalogue.derive_name_mappings_from_known_japanese_names()
-        assert result.mapped == 1
-        derived = next(card for card in catalogue.search("known name") if card.set_code == "DPR")
-        assert derived.source == "fandom-derived"
+        assert result.mapped == 0
+        assert catalogue.unmapped_japanese_count("DPR") == 1
+        assert not any(
+            card.set_code == "DPR" for card in catalogue.search("known name", japanese_only=True)
+        )
 
 
 def test_mapping_propagates_a_trusted_name_to_parallel_prints(tmp_path: Path) -> None:

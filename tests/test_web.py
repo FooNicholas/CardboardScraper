@@ -87,3 +87,25 @@ def test_local_web_rejects_an_empty_search(tmp_path: Path) -> None:
             assert str(error) == "Enter a card name to search."
         else:
             raise AssertionError("An empty web search should fail clearly.")
+
+
+def test_local_web_shows_more_than_twelve_shared_name_prints(tmp_path: Path) -> None:
+    with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
+        for number in range(13):
+            catalogue.upsert(
+                CardPrint(
+                    "D-PR",
+                    str(1200 + number),
+                    "PR",
+                    "Energy Generator",
+                    japanese_name="エネルギージェネレーター",
+                    source="test",
+                )
+            )
+        app = LocalPriceCheckWeb(catalogue, ComparisonService([]))
+
+        results = app.search("energy generator")["cards"]
+        assert len(results) == 13
+        assert {card["collector_number"] for card in results} == {
+            str(1200 + number) for number in range(13)
+        }

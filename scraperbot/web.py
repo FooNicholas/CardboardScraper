@@ -23,7 +23,9 @@ from scraperbot.services.comparison import ComparisonService
 
 
 MAX_QUERY_LENGTH = 120
-MAX_CHOICES = 12
+# Shared-name promo cards may have dozens of distinct Japanese printings. Keep
+# the browser list large enough for the user to choose the exact one.
+MAX_CHOICES = 40
 
 
 class LocalPriceCheckWeb:

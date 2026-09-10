@@ -109,6 +109,7 @@ scraperbot-import-japanese --all
 scraperbot-link-official-japanese
 scraperbot-map-fandom --all
 scraperbot-derive-japanese-names
+scraperbot-repair-promo-mappings
 ```
 
 The first command imports the official Japanese print master: Japanese name,
@@ -136,6 +137,24 @@ numbers.
 Finally, the derivation command resolves reprints only when the exact Japanese
 name has one unambiguous existing English mapping. It never uses machine
 translation or guesses from similar names.
+
+### Japanese promo repair
+
+`D-PR` is different: Japanese and English promo serials have separate regional
+sequences, so an equal number cannot identify the same card. After importing
+or updating the catalogue, rebuild Japanese promo name mappings with:
+
+```sh
+scraperbot-repair-promo-mappings
+```
+
+The command removes stale Japanese-facing D-PR search records, preserves the
+official English promo catalogue only as internal reference data, restores
+direct Fandom links, and maps a promo to a main-set card only when its exact
+Japanese name has one unambiguous Fandom name. It also records the shared
+English labels for Energy, Energy Generator, and Quick Shield printings, so a
+name search returns all their Japanese printings together. It never assumes an
+English and Japanese D-PR serial with the same number are the same card.
 
 When Bushiroad later publishes an English print, the official-English importer
 always preserves that name rather than replacing it with a Fandom mapping.

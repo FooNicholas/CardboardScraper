@@ -52,18 +52,17 @@
 
 ## Known defects
 
-- **BUG-PR-001 — Incorrect promo English-name mappings.** Some Japanese D-PR
-  prints are currently attached to the wrong English search name. The report
+- **BUG-PR-001 — Corrected for the current local D-PR catalogue.** The report
   at [Card Rush product 37326](https://www.cardrush-vanguard.jp/product/37326)
-  is the reference example. This can make an English-name search select the
-  wrong Japanese promo and return prices for that wrong print. The root cause
-  is confirmed: the current official-English linker treats equal `D-PR` serial
-  numbers in the Japanese and English databases as identical cards. Promo
-  serial sequences are regional and not equivalent. For example, Japanese
-  `D-PR/953` is the foil printing of Leuhan, while the English `D-PR/953EN`
-  entry is a different card; the number-only match overwrote Leuhan's name.
-  Existing promo mappings must be audited before bulk promo ingestion or
-  user-facing serial search is released.
+  was caused by the official-English linker treating equal Japanese and English
+  `D-PR` serials as identical. They are independent regional sequences:
+  Japanese `D-PR/953` is the Leuhan foil, while English `D-PR/953EN` is a
+  different card. D-PR and campaign-print official English records now live in
+  an internal reference store; they cannot overwrite or appear as Japanese
+  search results. The repair rebuilt the local D-PR catalogue from direct
+  Fandom evidence and unambiguous exact-Japanese-name matches. Remaining
+  unmapped promos are withheld from English-name search until reviewed, rather
+  than being given an unsafe match.
 
 ## Implementation plan and outstanding work
 
@@ -71,9 +70,9 @@
 | --- | --- | --- |
 | Core catalogue and comparison | Complete | English fuzzy search, Japanese-print selection, local browser and Telegram interfaces, and exact-print comparisons from Yuyu-Tei, BigWeb, Card Rush, and VanHappy. |
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
-| Promo mapping audit and correction | Planned — highest priority | Remove invalid cross-region equal-serial mappings, remap D-PR prints from exact Japanese-name evidence, quarantine conflicts, and add regression fixtures before expanding promo coverage. |
+| Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official promo links are blocked and archived as internal English references. The local D-PR repair cleared 1,694 prior search records, archived 1,103 English references, restored direct Fandom links, remapped exact Japanese-name matches, and added shared Energy, Energy Generator, and Quick Shield results. `D-PR/953` → Leuhan is covered by regression tests. |
 | Promo catalogue ingestion | Planned | Crawl Yuyu-Tei D Promo catalogue pages, including their serial ranges and product locations, into a resumable local import. |
-| Promo identity enrichment | Planned | Match imported promo prints to official Japanese data, explicit Fandom cross-print links, and an editable review queue for unresolved names. |
+| Promo identity enrichment | In progress | The safe automatic D-PR repair is complete. 1,180 current D-PR prints still lack an unambiguous reviewed English name and require explicit Fandom evidence or a review decision before they enter user search. |
 | One-time translation review | Planned | Translate only unresolved playable or Energy names during import; persist the approved English search name and provenance locally. No user search may trigger a translation. |
 | Serial-number search | Planned | Add Japanese-print serial normalisation, exact reference lookup, ambiguity handling for bare numbers, and Japanese serial result labels. English serials remain internal mapping data only. |
 | Multi-store promo lookup | Planned | Pass the selected canonical serial to every connector, use each store's catalogue location when needed, and verify the exact reference before showing an offer. |
@@ -82,22 +81,22 @@
 
 ### Planned promo implementation sequence
 
-1. Stop using identical serial numbers as cross-region identity evidence for
-   `D-PR` (and other promo/campaign serial families). Exact printed-reference
-   linking remains valid only for release families whose Japanese and English
-   numbering is explicitly known to be shared.
-2. Rebuild the affected Japanese promo mappings after removing the invalid
-   equal-serial official-English links. `D-PR/953` is the first regression
-   case: it must resolve to the Leuhan English name, not the English card that
-   happens to be numbered `D-PR/953EN`.
-3. Build a canonical Japanese-name mapping index from the existing Fandom
-   English-to-Japanese mappings and other reviewed sources. For each exact
-   Japanese name, collect its distinct English-name candidates and their
-   provenance.
-4. Map a promo foil automatically only when its exact Japanese name has one
-   verified English candidate. This maps a promo foil to its main-set card name
-   regardless of unrelated Japanese and English promo serials.
-5. Put ambiguous, missing, or conflicting Japanese names into a review queue.
+1. **Complete:** identical Japanese and English promo serials are no longer
+   cross-region identity evidence for `D-PR` or campaign print families. Exact
+   reference linking remains for release families whose regional numbering is
+   explicitly shared.
+2. **Complete:** `scraperbot-repair-promo-mappings` archives the conflicting
+   English promo records and rebuilds Japanese D-PR search mappings. Its
+   regression fixture requires `D-PR/953` to resolve to Leuhan rather than the
+   unrelated English `D-PR/953EN` card.
+3. **Complete:** the repair builds its mapping index from existing direct
+   Fandom mappings and explicit Fandom cross-print links, keeping provenance
+   for every accepted result.
+4. **Complete:** a promo is mapped automatically only when its exact Japanese
+   name has one verified English candidate. Energy, Energy Generator, and
+   Quick Shield share approved English search names and may appear together in
+   results.
+5. **Next:** put ambiguous, missing, or conflicting Japanese names into a review queue.
    A one-time translation is allowed only for these entries; save the approved
    English name, source, reviewer decision, and timestamp. Never overwrite a
    reviewed mapping merely because another region reuses its serial number.

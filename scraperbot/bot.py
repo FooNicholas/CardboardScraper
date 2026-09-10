@@ -15,7 +15,9 @@ from scraperbot.services.comparison import ComparisonService
 from scraperbot.services.formatting import format_card_choices, format_comparison
 
 
-MAX_CHOICES: Final = 8
+# Energy, Energy Generator, and Quick Shield promos share English names but
+# are distinct priced printings, so make every current match selectable.
+MAX_CHOICES: Final = 40
 
 
 def choice_keyboard(cards: list[CardPrint]) -> InlineKeyboardMarkup:

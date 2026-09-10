@@ -33,6 +33,7 @@ scraperbot-link-official-japanese = "scraperbot.catalogue.official_japanese_link
 scraperbot-map-fandom = "scraperbot.catalogue.fandom_importer:main"
 scraperbot-map-cross-prints = "scraperbot.catalogue.cross_print_importer:main"
 scraperbot-derive-japanese-names = "scraperbot.catalogue.japanese_name_deriver:main"
+scraperbot-repair-promo-mappings = "scraperbot.catalogue.promo_mapping_repair:main"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
