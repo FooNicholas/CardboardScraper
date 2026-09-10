@@ -10,7 +10,7 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes, Mes
 
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.models import CardPrint
-from scraperbot.query import parse_name_query
+from scraperbot.query import parse_name_search_query
 from scraperbot.services.comparison import ComparisonService
 from scraperbot.services.formatting import format_card_choices, format_comparison
 
@@ -51,7 +51,8 @@ class TelegramPriceBot:
         if update.effective_message:
             await update.effective_message.reply_text(
                 "Send an English card name, even a partial one.\n"
-                "Examples: /price Youthberk, /price chronojet ffr\n\n"
+                "Examples: /price Youthberk, /price chronojet ffr,\n"
+                "/price Youthberk rarity:FFR,SEC finish:holo\n\n"
                 "I will show matching Japanese-market prints, then compare the supported stores."
             )
 
@@ -71,23 +72,39 @@ class TelegramPriceBot:
         self, update: Update, context: ContextTypes.DEFAULT_TYPE, raw_query: str
     ) -> None:
         message = update.effective_message
-        query, rarity = parse_name_query(raw_query)
+        try:
+            parsed_query = parse_name_search_query(raw_query)
+        except ValueError as error:
+            if message:
+                await message.reply_text(str(error))
+            return
         if not message:
             return
-        if not query:
+        if not parsed_query.name:
             await message.reply_text("Try a card name, such as: /price Youthberk")
             return
 
         serial_card = self.catalogue.lookup_japanese_serial(raw_query)
         cards = (
             [serial_card]
-            if serial_card
-            else self.catalogue.search(query, rarity=rarity, limit=MAX_CHOICES, japanese_only=True)
+            if serial_card and not (parsed_query.rarities or parsed_query.finishes)
+            else self.catalogue.search(
+                parsed_query.name,
+                rarities=parsed_query.rarities,
+                finishes=parsed_query.finishes,
+                limit=MAX_CHOICES,
+                japanese_only=True,
+            )
         )
         if not cards:
-            suffix = f" with rarity {rarity}" if rarity else ""
+            filters = []
+            if parsed_query.rarities:
+                filters.append("rarity " + ", ".join(parsed_query.rarities))
+            if parsed_query.finishes:
+                filters.append("finish " + ", ".join(finish.value for finish in parsed_query.finishes))
+            suffix = f" with {' and '.join(filters)}" if filters else ""
             await message.reply_text(
-                f"No Japanese-market card print matched “{query}”{suffix}. "
+                f"No Japanese-market card print matched “{parsed_query.name}”{suffix}. "
                 "Try a shorter spelling or refresh the catalogue."
             )
             return

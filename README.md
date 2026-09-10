@@ -19,6 +19,10 @@ only after the user has chosen it.
 - Explicitly labelled print finishes are kept separate from rarity. For
   example, `H仕様` is recorded as a holo finish while preserving the original
   Japanese label for display and exact-listing checks.
+- Filter a search with browser controls, or in Telegram/API text with
+  `rarity:FFR,SEC` and `finish:holo`. A finish filter intentionally retains
+  prints whose finish is not yet labelled rather than guessing they are
+  standard.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as an English-name mapping source.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and

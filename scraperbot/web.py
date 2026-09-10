@@ -17,8 +17,8 @@ from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardrush import CardRushConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
-from scraperbot.models import CardPrint, ComparisonResult, StoreOffer
-from scraperbot.query import parse_name_query
+from scraperbot.models import CardPrint, ComparisonResult, StoreOffer, normalise_finish
+from scraperbot.query import parse_name_search_query
 from scraperbot.services.comparison import ComparisonService
 
 
@@ -35,22 +35,43 @@ class LocalPriceCheckWeb:
         self.catalogue = catalogue
         self.comparison = comparison
 
-    def search(self, raw_query: str) -> dict[str, Any]:
+    def search(
+        self, raw_query: str, *, rarities: tuple[str, ...] = (), finishes: tuple[str, ...] = ()
+    ) -> dict[str, Any]:
+        parsed_query = parse_name_search_query(raw_query[:MAX_QUERY_LENGTH])
         serial_card = self.catalogue.lookup_japanese_serial(raw_query[:MAX_QUERY_LENGTH])
-        if serial_card:
+        if serial_card and not (parsed_query.rarities or parsed_query.finishes or rarities or finishes):
             return {
                 "query": raw_query.strip(),
                 "rarity": None,
+                "rarities": [],
+                "finishes": [],
                 "mode": "japanese_serial",
                 "cards": [self._card_payload(serial_card)],
             }
-        query, rarity = parse_name_query(raw_query[:MAX_QUERY_LENGTH])
-        if not query:
+        if not parsed_query.name:
             raise ValueError("Enter a card name to search.")
-        cards = self.catalogue.search(query, rarity=rarity, limit=MAX_CHOICES, japanese_only=True)
+        selected_rarities = tuple(
+            sorted({*parsed_query.rarities, *(value.strip().upper() for value in rarities if value.strip())})
+        )
+        selected_finishes = tuple(
+            sorted(
+                {*parsed_query.finishes, *(normalise_finish(value) for value in finishes)},
+                key=lambda finish: finish.value,
+            )
+        )
+        cards = self.catalogue.search(
+            parsed_query.name,
+            rarities=selected_rarities,
+            finishes=selected_finishes,
+            limit=MAX_CHOICES,
+            japanese_only=True,
+        )
         return {
-            "query": query,
-            "rarity": rarity,
+            "query": parsed_query.name,
+            "rarity": selected_rarities[0] if len(selected_rarities) == 1 else None,
+            "rarities": list(selected_rarities),
+            "finishes": [finish.value for finish in selected_finishes],
             "mode": "name",
             "cards": [self._card_payload(card) for card in cards],
         }
@@ -125,7 +146,14 @@ class LocalWebRequestHandler(BaseHTTPRequestHandler):
         parameters = parse_qs(request.query, keep_blank_values=True)
         if request.path == "/api/search":
             try:
-                self._send_json(HTTPStatus.OK, self.application.search(parameters.get("q", [""])[0]))
+                self._send_json(
+                    HTTPStatus.OK,
+                    self.application.search(
+                        parameters.get("q", [""])[0],
+                        rarities=tuple(parameters.get("rarity", [])),
+                        finishes=tuple(parameters.get("finish", [])),
+                    ),
+                )
             except ValueError as error:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
             return
@@ -250,6 +278,13 @@ INDEX_HTML = """<!doctype html>
     .hint button:hover,.comparison-head button:hover { color:var(--accent-hover); background:var(--accent-soft); border-color:#e6ad8b; }
     #status { min-height:1.5em; color:var(--muted); margin-bottom:12px; }
     #status.error { color:var(--danger); }
+    .filters { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; margin:0 0 18px; padding:12px 14px; background:#fff9f2; border:1px solid var(--line); border-radius:12px; }
+    .filter-group { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    .filter-label { color:var(--muted); font-size:.77rem; font-weight:750; letter-spacing:.06em; text-transform:uppercase; }
+    .filter-button { color:var(--muted); background:transparent; border-color:var(--line); padding:5px 9px; font-size:.8rem; }
+    .filter-button:hover,.filter-button.active { color:var(--accent-hover); background:var(--accent-soft); border-color:#e6ad8b; }
+    .filter-clear { color:var(--muted); background:transparent; border-color:transparent; padding:5px 2px; font-size:.8rem; text-decoration:underline; }
+    .filter-clear:hover { color:var(--accent-hover); background:transparent; }
     .result-list { display:grid; gap:10px; }
     .card { width:100%; text-align:left; color:var(--ink); background:var(--surface); border:1px solid var(--line); padding:17px; border-radius:13px; display:flex; gap:16px; align-items:center; box-shadow:0 2px 5px #5e433a08; }
     .card:hover { border-color:#df8f64; background:#fffaf5; }
@@ -280,15 +315,19 @@ INDEX_HTML = """<!doctype html>
   <p class="intro">Search by English card name—even partially spelled—or enter an exact Japanese serial before checking stores.</p>
   <form id="search-form"><input id="query" type="search" maxlength="120" autocomplete="off" placeholder="Try: Youthberk, D-PR/953" autofocus><button id="search-button">Search</button></form>
   <div class="hint">Optional rarity at the end: <button type="button" data-query="Youthberk FFR">Youthberk FFR</button><button type="button" data-query="D-PR/953">D-PR/953</button></div>
-  <div id="status" aria-live="polite"></div><div class="workspace"><section class="print-panel"><p class="panel-label">Matching printings</p><section id="results" class="result-list"></section></section><section class="price-panel"><p class="panel-label">Price comparison</p><section id="comparison"></section></section></div>
+  <div id="status" aria-live="polite"></div><section id="filters" class="filters" aria-label="Filter matching printings" hidden></section><div class="workspace"><section class="print-panel"><p class="panel-label">Matching printings</p><section id="results" class="result-list"></section></section><section class="price-panel"><p class="panel-label">Price comparison</p><section id="comparison"></section></section></div>
 </main><script>
-const query = document.querySelector('#query'), form = document.querySelector('#search-form'), searchButton = document.querySelector('#search-button'), status = document.querySelector('#status'), results = document.querySelector('#results'), comparison = document.querySelector('#comparison');
-let selectedId = null;
+const query = document.querySelector('#query'), form = document.querySelector('#search-form'), searchButton = document.querySelector('#search-button'), status = document.querySelector('#status'), filters = document.querySelector('#filters'), results = document.querySelector('#results'), comparison = document.querySelector('#comparison');
+let selectedId = null, searchCards = [], activeRarities = new Set(), activeFinishes = new Set();
 function setStatus(message, isError=false) { status.textContent = message; status.className = isError ? 'error' : ''; }
 function clear(node) { node.replaceChildren(); }
 function text(tag, value, className) { const node=document.createElement(tag); node.textContent=value || ''; if (className) node.className=className; return node; }
 async function readJson(response) { const data=await response.json(); if (!response.ok) throw new Error(data.error || 'Something went wrong.'); return data; }
-async function search(raw) { const value=(raw || query.value).trim(); if (!value) { setStatus('Enter a card name to search.', true); return; } query.value=value; clear(results); clear(comparison); selectedId=null; setStatus('Finding matching prints…'); searchButton.disabled=true; try { const data=await readJson(await fetch('/api/search?q='+encodeURIComponent(value))); if (!data.cards.length) { setStatus('No Japanese-market print matched that name. Try a shorter spelling.'); return; } setStatus(data.cards.length+' matching print'+(data.cards.length===1?'':'s')+' — choose one to compare stores.'); for (const card of data.cards) { const button=document.createElement('button'); button.type='button'; button.className='card'; button.dataset.printId=card.id; const copy=document.createElement('div'); copy.append(text('h2',card.english_name), text('p',card.japanese_name)); button.append(copy,text('div',card.display_code,'code')); button.addEventListener('click',()=>compare(card.id)); results.append(button); } } catch (error) { setStatus(error.message,true); } finally { searchButton.disabled=false; } }
+function filteredCards() { return searchCards.filter(card => (!activeRarities.size || activeRarities.has(card.rarity)) && (!activeFinishes.size || card.finish==='unknown' || activeFinishes.has(card.finish))); }
+function renderCards() { clear(results); const cards=filteredCards(), total=searchCards.length, hasFilters=activeRarities.size || activeFinishes.size; if (!cards.length) { setStatus('No matching print uses those filters. Clear a filter to see all '+total+' matching prints.', true); return; } setStatus(cards.length+' matching print'+(cards.length===1?'':'s')+(hasFilters ? ' of '+total : '')+' — choose one to compare stores.'); for (const card of cards) { const button=document.createElement('button'); button.type='button'; button.className='card'; button.dataset.printId=card.id; const copy=document.createElement('div'); copy.append(text('h2',card.english_name), text('p',card.japanese_name)); button.append(copy,text('div',card.display_code,'code')); button.addEventListener('click',()=>compare(card.id)); results.append(button); } highlightSelection(); }
+function filterButton(label, selected, onClick) { const button=document.createElement('button'); button.type='button'; button.className='filter-button'+(selected ? ' active' : ''); button.textContent=label; button.setAttribute('aria-pressed',String(selected)); button.addEventListener('click',onClick); return button; }
+function renderFilters() { clear(filters); const rarities=[...new Set(searchCards.map(card=>card.rarity).filter(Boolean))].sort(); const finishes=[...new Set(searchCards.map(card=>card.finish).filter(finish=>finish && finish!=='unknown'))].sort(); if (!rarities.length && !finishes.length) { filters.hidden=true; return; } filters.hidden=false; if (rarities.length) { const group=document.createElement('div'); group.className='filter-group'; group.append(text('span','Rarity','filter-label')); for (const rarity of rarities) group.append(filterButton(rarity,activeRarities.has(rarity),()=>{ activeRarities.has(rarity) ? activeRarities.delete(rarity) : activeRarities.add(rarity); renderFilters(); renderCards(); })); filters.append(group); } if (finishes.length) { const group=document.createElement('div'); group.className='filter-group'; group.append(text('span','Finish','filter-label')); for (const finish of finishes) { const label=finish==='holo' ? 'Holo' : finish==='standard' ? 'Standard' : finish; group.append(filterButton(label,activeFinishes.has(finish),()=>{ activeFinishes.has(finish) ? activeFinishes.delete(finish) : activeFinishes.add(finish); renderFilters(); renderCards(); })); } filters.append(group); } if (activeRarities.size || activeFinishes.size) { const reset=document.createElement('button'); reset.type='button'; reset.className='filter-clear'; reset.textContent='Clear filters'; reset.addEventListener('click',()=>{ activeRarities.clear(); activeFinishes.clear(); renderFilters(); renderCards(); }); filters.append(reset); } }
+async function search(raw) { const value=(raw || query.value).trim(); if (!value) { setStatus('Enter a card name to search.', true); return; } query.value=value; clear(results); clear(comparison); clear(filters); filters.hidden=true; selectedId=null; searchCards=[]; activeRarities.clear(); activeFinishes.clear(); setStatus('Finding matching prints…'); searchButton.disabled=true; try { const data=await readJson(await fetch('/api/search?q='+encodeURIComponent(value))); if (!data.cards.length) { setStatus('No Japanese-market print matched that name. Try a shorter spelling.'); return; } searchCards=data.cards; renderFilters(); renderCards(); } catch (error) { setStatus(error.message,true); } finally { searchButton.disabled=false; } }
 function safeLink(url) { try { const parsed=new URL(url); return ['https:','http:'].includes(parsed.protocol) ? parsed.href : null; } catch { return null; } }
 function highlightSelection() { document.querySelectorAll('.card[data-print-id]').forEach(card=>card.classList.toggle('active',Number(card.dataset.printId)===selectedId)); }
 function renderComparison(data) { highlightSelection(); clear(comparison); const head=document.createElement('div'); head.className='comparison-head'; const copy=document.createElement('div'); copy.append(text('h2',data.card.english_name),text('p',(data.card.japanese_name ? data.card.japanese_name+' · ' : '')+data.card.display_code)); const refresh=document.createElement('button'); refresh.textContent='Refresh prices'; refresh.addEventListener('click',()=>compare(data.card.id,true)); head.append(copy,refresh); comparison.append(head); if (!data.offers.length) comparison.append(text('p','No active store listing is available for this exact print right now.','notice')); for (const offer of data.offers) { const row=document.createElement('div'); row.className='offer'; const store=document.createElement(offer.listing_url ? 'a' : 'div'); store.textContent=offer.store_name+(offer.condition ? ' · '+offer.condition : ''); if (offer.listing_url) { const href=safeLink(offer.listing_url); if (href) { store.href=href; store.target='_blank'; store.rel='noopener noreferrer'; } } const detail=text('small',offer.raw_name); const storeWrap=document.createElement('div'); storeWrap.append(store,detail); const stock=Number.isInteger(offer.stock_count) ? offer.stock_count+' left' : offer.availability==='sold_out' ? '×' : offer.availability==='in_stock' ? '◯' : '?'; const finish=offer.finish_raw || (offer.finish==='holo' ? 'Holo' : offer.finish==='standard' ? 'Standard' : ''); const tags=[stock,finish,offer.match_confidence.replaceAll('_',' ')].filter(Boolean).join(' · '); row.append(storeWrap,text('div',offer.price_display,offer.availability==='in_stock'?'price':'sold'),text('div',tags,'tag')); comparison.append(row); } const notices=[]; if (data.no_active_listing_stores.length) notices.push('No active listing (sold out or not stocked): '+data.no_active_listing_stores.join(', ')); if (data.unavailable_stores.length) notices.push('Set not listed: '+data.unavailable_stores.join(', ')); if (data.failed_stores.length) notices.push('Could not check: '+data.failed_stores.join(', ')); if (notices.length) comparison.append(text('p',notices.join(' · '),'notice')); }

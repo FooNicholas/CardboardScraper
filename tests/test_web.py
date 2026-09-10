@@ -3,7 +3,7 @@ from pathlib import Path
 
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.connectors.base import StoreConnector
-from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer
+from scraperbot.models import Availability, CardPrint, Finish, MatchConfidence, StoreOffer
 from scraperbot.services.comparison import ComparisonService
 from scraperbot.web import LocalPriceCheckWeb
 
@@ -38,11 +38,13 @@ def test_local_web_search_and_comparison_share_the_catalogue(tmp_path: Path) -> 
                 "Exacerbate Dragon",
                 japanese_name="エグザサベイト・ドラゴン",
                 source="test",
+                finish=Finish.HOLO,
+                finish_raw="H仕様",
             )
         )
         app = LocalPriceCheckWeb(catalogue, ComparisonService([FixedConnector()]))
 
-        search = app.search("exacerbate ffr")
+        search = app.search("exacerbate rarity:FFR finish:holo")
         assert search["cards"] == [
             {
                 "id": card.id,
@@ -51,12 +53,14 @@ def test_local_web_search_and_comparison_share_the_catalogue(tmp_path: Path) -> 
                 "set_code": "DZBT16",
                 "collector_number": "FFR02",
                 "rarity": "FFR",
-                "finish": "unknown",
-                "finish_raw": None,
-                "display_code": "DZBT16/FFR02 · FFR",
+                "finish": "holo",
+                "finish_raw": "H仕様",
+                "display_code": "DZBT16/FFR02 · FFR · H仕様",
                 "source": "test",
             }
         ]
+        assert search["rarities"] == ["FFR"]
+        assert search["finishes"] == ["holo"]
 
         comparison = asyncio.run(app.compare(card.id or 0))
         assert comparison["offers"][0]["store_name"] == "Example Store"

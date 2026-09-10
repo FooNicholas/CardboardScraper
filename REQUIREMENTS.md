@@ -88,7 +88,7 @@
 | One-time translation review | Ready for reviewed input | Translate only unresolved playable names during review; enter the approved result and provenance through the local promo review file. Energy, Energy Generator, and Quick Shield remain held. No user search may trigger a translation. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
 | Finish / holo metadata | Implemented | Canonical Japanese prints and store offers retain raw finish text plus a normalised holo/standard/unknown value. Official `H仕様` suffixes are stored as holo, and an explicitly conflicting retailer finish is excluded from an exact-print comparison. |
-| Rarity and finish filters | Planned | Add browser controls and Telegram syntax for filtering a name search by one or more rarities and, when populated, holo/standard finish. Keep the existing trailing-rarity shortcut compatible. |
+| Rarity and finish filters | Implemented | The browser offers multi-select rarity and finish controls; Telegram and the search API accept `rarity:FFR,SEC` and `finish:holo`. The trailing-rarity shortcut remains supported. Unknown-finish printings stay visible when filtering by holo or standard. |
 | Lowest-price all-printings comparison | Planned | Add an opt-in card-level view that compares every verified Japanese reprint of the same canonical card, labels each offer with its exact print and finish, and sorts offers by current price. Do not group cards from fuzzy English-name similarity alone. |
 | Multi-store promo lookup | In progress | Yuyu-Tei now uses the stored D-Promo range page for a selected D-PR serial and verifies its exact reference. Card Rush, VanHappy, and BigWeb still need explicit promo catalogue locations or serial-first lookup paths. |
 | Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
@@ -155,9 +155,10 @@
 2. **Complete:** update each store parser and exact-reference matcher to
    capture finish independently from rarity. A tested Yuyu-Tei fixture proves
    a declared standard variant cannot be returned for a selected holo print.
-3. Add a rarity/finish filter layer to browser search results and Telegram
-   commands. Filtering narrows results only; it must never change a card's
-   identity or hide a result merely because finish data is unknown.
+3. **Complete:** add a multi-select rarity/finish filter layer to browser
+   search results and Telegram commands. Filtering narrows results only; it
+   never changes a card's identity or hides a result merely because finish
+   data is unknown.
 4. Introduce a verified card-family relation that groups Japanese reprints
    only when they share explicit canonical Japanese identity or vetted
    cross-print evidence. Names that merely look alike remain separate.

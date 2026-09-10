@@ -14,9 +14,11 @@ from rapidfuzz import fuzz
 from scraperbot.models import (
     CardPrint,
     EnglishNameMapping,
+    Finish,
     JapaneseCardPrint,
     PromoCatalogueEntry,
     normalise_collector_number,
+    normalise_finish,
     normalise_set_code,
     normalise_text,
 )
@@ -1025,6 +1027,8 @@ class CatalogueRepository:
         query: str,
         *,
         rarity: str | None = None,
+        rarities: Iterable[str] = (),
+        finishes: Iterable[Finish | str] = (),
         limit: int = 8,
         japanese_only: bool = False,
     ) -> list[CardPrint]:
@@ -1037,14 +1041,14 @@ class CatalogueRepository:
         normalised_query = normalise_text(query)
         if not normalised_query:
             return []
-        if rarity:
-            rarity = rarity.strip().upper()
+        rarity_values = self._normalise_rarities(rarity, rarities)
+        finish_values = self._normalise_finishes(finishes)
 
-        rows = self._fts_rows(normalised_query, rarity, japanese_only)
+        rows = self._fts_rows(normalised_query, rarity_values, finish_values, japanese_only)
         if not rows:
-            rows = self._substring_rows(normalised_query, rarity, japanese_only)
+            rows = self._substring_rows(normalised_query, rarity_values, finish_values, japanese_only)
         if not rows:
-            rows = self._all_rows(rarity, japanese_only)
+            rows = self._all_rows(rarity_values, finish_values, japanese_only)
 
         ranked = sorted(
             ((self._score(normalised_query, row), self._to_card(row)) for row in rows),
@@ -1052,16 +1056,56 @@ class CatalogueRepository:
         )
         return [card for score, card in ranked if score >= 55][:limit]
 
-    def _fts_rows(self, query: str, rarity: str | None, japanese_only: bool) -> list[sqlite3.Row]:
+    @staticmethod
+    def _normalise_rarities(rarity: str | None, rarities: Iterable[str]) -> tuple[str, ...]:
+        values = [value.strip().upper() for value in rarities if value and value.strip()]
+        if rarity and rarity.strip():
+            values.append(rarity.strip().upper())
+        return tuple(sorted(set(values)))
+
+    @staticmethod
+    def _normalise_finishes(finishes: Iterable[Finish | str]) -> tuple[Finish, ...]:
+        return tuple(sorted({normalise_finish(value) for value in finishes}, key=lambda finish: finish.value))
+
+    @staticmethod
+    def _filter_conditions(
+        prefix: str, rarities: tuple[str, ...], finishes: tuple[Finish, ...]
+    ) -> tuple[list[str], list[object]]:
+        conditions: list[str] = []
+        values: list[object] = []
+        if rarities:
+            conditions.append(f"{prefix}rarity IN ({', '.join('?' for _ in rarities)})")
+            values.extend(rarities)
+        if finishes:
+            placeholders = ", ".join("?" for _ in finishes)
+            if Finish.UNKNOWN in finishes:
+                conditions.append(f"{prefix}finish IN ({placeholders})")
+                values.extend(finish.value for finish in finishes)
+            else:
+                # A store or official source omitting a finish is not evidence
+                # that the printing is standard. Keep those candidates visible
+                # for a holo/standard filter until the catalogue can classify
+                # them explicitly.
+                conditions.append(f"({prefix}finish IN ({placeholders}) OR {prefix}finish = 'unknown')")
+                values.extend(finish.value for finish in finishes)
+        return conditions, values
+
+    def _fts_rows(
+        self,
+        query: str,
+        rarities: tuple[str, ...],
+        finishes: tuple[Finish, ...],
+        japanese_only: bool,
+    ) -> list[sqlite3.Row]:
         tokens = [token for token in query.split() if token]
         if not tokens:
             return []
         match_expression = " AND ".join(f'"{token}"*' for token in tokens)
         conditions = ["card_search MATCH ?"]
         values: list[object] = [match_expression]
-        if rarity:
-            conditions.append("p.rarity = ?")
-            values.append(rarity)
+        filter_conditions, filter_values = self._filter_conditions("p.", rarities, finishes)
+        conditions.extend(filter_conditions)
+        values.extend(filter_values)
         if japanese_only:
             conditions.append("p.japanese_name IS NOT NULL AND TRIM(p.japanese_name) != ''")
         try:
@@ -1077,24 +1121,28 @@ class CatalogueRepository:
         except sqlite3.OperationalError:
             return []
 
-    def _substring_rows(self, query: str, rarity: str | None, japanese_only: bool) -> list[sqlite3.Row]:
+    def _substring_rows(
+        self,
+        query: str,
+        rarities: tuple[str, ...],
+        finishes: tuple[Finish, ...],
+        japanese_only: bool,
+    ) -> list[sqlite3.Row]:
         conditions = ["(normalised_name LIKE ? OR normalised_aliases LIKE ?)"]
         values: list[object] = [f"%{query}%", f"%{query}%"]
-        if rarity:
-            conditions.append("rarity = ?")
-            values.append(rarity)
+        filter_conditions, filter_values = self._filter_conditions("", rarities, finishes)
+        conditions.extend(filter_conditions)
+        values.extend(filter_values)
         if japanese_only:
             conditions.append("japanese_name IS NOT NULL AND TRIM(japanese_name) != ''")
         return self.connection.execute(
             f"SELECT * FROM card_prints WHERE {' AND '.join(conditions)} LIMIT 120", values
         ).fetchall()
 
-    def _all_rows(self, rarity: str | None, japanese_only: bool) -> list[sqlite3.Row]:
-        conditions: list[str] = []
-        values: list[object] = []
-        if rarity:
-            conditions.append("rarity = ?")
-            values.append(rarity)
+    def _all_rows(
+        self, rarities: tuple[str, ...], finishes: tuple[Finish, ...], japanese_only: bool
+    ) -> list[sqlite3.Row]:
+        conditions, values = self._filter_conditions("", rarities, finishes)
         if japanese_only:
             conditions.append("japanese_name IS NOT NULL AND TRIM(japanese_name) != ''")
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ""

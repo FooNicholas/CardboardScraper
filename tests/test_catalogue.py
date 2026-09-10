@@ -2,7 +2,7 @@ from pathlib import Path
 
 from scraperbot.catalogue.importer import import_file
 from scraperbot.catalogue.repository import CatalogueRepository
-from scraperbot.models import CardPrint
+from scraperbot.models import CardPrint, Finish
 
 
 def test_search_supports_partial_alias_and_typo(tmp_path: Path) -> None:
@@ -18,6 +18,7 @@ def test_search_supports_partial_alias_and_typo(tmp_path: Path) -> None:
                     japanese_name="蒼嵐竜 メイルストローム",
                     aliases=("skyfall youthberk", "youth berk"),
                     source="test",
+                    finish=Finish.HOLO,
                 ),
                 CardPrint(
                     set_code="DZ-BT16",
@@ -27,13 +28,24 @@ def test_search_supports_partial_alias_and_typo(tmp_path: Path) -> None:
                     aliases=("blaster",),
                     source="test",
                 ),
+                CardPrint(
+                    set_code="DZ-BT16",
+                    collector_number="17",
+                    rarity="SEC",
+                    english_name='Youthberk "Skyfall Arms"',
+                    japanese_name="蒼嵐竜 メイルストローム",
+                    source="test",
+                ),
             ]
         )
-        assert catalogue.count == 2
+        assert catalogue.count == 3
         assert catalogue.search("skyfall")[0].english_name == 'Youthberk "Skyfall Arms"'
         assert catalogue.search("youth berk")[0].collector_number == "015"
         assert catalogue.search("youthberk")[0].rarity == "FFR"
         assert catalogue.search("blastr")[0].english_name == "Blaster Blade"
+        assert catalogue.search("skyfall", rarities=("FFR",), finishes=("holo",))[0].collector_number == "015"
+        assert {card.collector_number for card in catalogue.search("skyfall", finishes=("holo",))} == {"015", "017"}
+        assert [card.collector_number for card in catalogue.search("skyfall", finishes=("standard",))] == ["017"]
         blaster = catalogue.search("blaster", rarity="RRR")[0]
         assert blaster.collector_number == "016"
         assert catalogue.search("skyfall", japanese_only=True)[0].english_name == 'Youthberk "Skyfall Arms"'
