@@ -36,6 +36,14 @@ class LocalPriceCheckWeb:
         self.comparison = comparison
 
     def search(self, raw_query: str) -> dict[str, Any]:
+        serial_card = self.catalogue.lookup_japanese_serial(raw_query[:MAX_QUERY_LENGTH])
+        if serial_card:
+            return {
+                "query": raw_query.strip(),
+                "rarity": None,
+                "mode": "japanese_serial",
+                "cards": [self._card_payload(serial_card)],
+            }
         query, rarity = parse_name_query(raw_query[:MAX_QUERY_LENGTH])
         if not query:
             raise ValueError("Enter a card name to search.")
@@ -43,11 +51,12 @@ class LocalPriceCheckWeb:
         return {
             "query": query,
             "rarity": rarity,
+            "mode": "name",
             "cards": [self._card_payload(card) for card in cards],
         }
 
     async def compare(self, print_id: int, *, refresh: bool = False) -> dict[str, Any]:
-        card = self.catalogue.get(print_id, japanese_only=True)
+        card = self.catalogue.get_user_selection(print_id)
         if not card:
             raise LookupError("That Japanese-market card print is no longer available for comparison.")
         result = await self.comparison.compare(card, refresh=refresh)
@@ -264,9 +273,9 @@ INDEX_HTML = """<!doctype html>
 </head>
 <body><main>
   <div class="eyebrow">Local card price comparison</div><h1>JP Price Checker</h1>
-  <p class="intro">Search by English card name—even partially spelled—and choose the exact Japanese-market printing before checking stores.</p>
-  <form id="search-form"><input id="query" type="search" maxlength="120" autocomplete="off" placeholder="Try: Youthberk, Haughty Peerage FFR" autofocus><button id="search-button">Search</button></form>
-  <div class="hint">Optional rarity at the end: <button type="button" data-query="Youthberk FFR">Youthberk FFR</button><button type="button" data-query="Chronojet">Chronojet</button></div>
+  <p class="intro">Search by English card name—even partially spelled—or enter an exact Japanese serial before checking stores.</p>
+  <form id="search-form"><input id="query" type="search" maxlength="120" autocomplete="off" placeholder="Try: Youthberk, D-PR/953" autofocus><button id="search-button">Search</button></form>
+  <div class="hint">Optional rarity at the end: <button type="button" data-query="Youthberk FFR">Youthberk FFR</button><button type="button" data-query="D-PR/953">D-PR/953</button></div>
   <div id="status" aria-live="polite"></div><div class="workspace"><section class="print-panel"><p class="panel-label">Matching printings</p><section id="results" class="result-list"></section></section><section class="price-panel"><p class="panel-label">Price comparison</p><section id="comparison"></section></section></div>
 </main><script>
 const query = document.querySelector('#query'), form = document.querySelector('#search-form'), searchButton = document.querySelector('#search-button'), status = document.querySelector('#status'), results = document.querySelector('#results'), comparison = document.querySelector('#comparison');

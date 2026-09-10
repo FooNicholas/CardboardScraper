@@ -74,7 +74,7 @@
 | Promo catalogue ingestion | Complete for current Yuyu-Tei scan | `scraperbot-import-yuyutei-promos --all` discovered every current numeric D-Promo group and stored 1,444 exact D-PR entries (numeric serials `1–1757`) from actual Yuyu-Tei listings. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. Empty range groups remain eligible for later refresh. |
 | Promo identity enrichment | In progress | The safe automatic D-PR repair is complete. 1,180 current D-PR prints still lack an unambiguous reviewed English name and require explicit Fandom evidence or a review decision before they enter user search. |
 | One-time translation review | Planned | Translate only unresolved playable or Energy names during import; persist the approved English search name and provenance locally. No user search may trigger a translation. |
-| Serial-number search | Planned | Add Japanese-print serial normalisation, exact reference lookup, ambiguity handling for bare numbers, and Japanese serial result labels. English serials remain internal mapping data only. |
+| Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
 | Multi-store promo lookup | In progress | Yuyu-Tei now uses the stored D-Promo range page for a selected D-PR serial and verifies its exact reference. Card Rush, VanHappy, and BigWeb still need explicit promo catalogue locations or serial-first lookup paths. |
 | Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
 | Dorasuta | Deferred | Do not add the Dorasuta connector at this time. |
@@ -117,10 +117,11 @@
 9. Enrich each promo with official Japanese data and explicit cross-print
    evidence. Send only still-unresolved names to the one-time translation
    review queue.
-10. Add Japanese serial normalisation and exact lookup to the catalogue search
-   API, the Telegram handler, and the browser UI. Formatted serials resolve
-   directly; ambiguous bare numbers prompt for a set family. English serials
-   are used only by the import/mapping layer and never appear in user results.
+10. **Complete:** Japanese serial normalisation and exact lookup work in the
+   catalogue search API, Telegram handler, and browser UI. Formatted serials
+   resolve directly; bare numbers are rejected as ambiguous. An unmapped
+   Japanese print can still be selected for exact comparison without creating
+   an English mapping. English serials are import/mapping data only.
 11. **In progress:** Yuyu-Tei reads the exact saved range page for a selected
    promo print. Add equivalent catalogue-location or serial-first metadata for
    Card Rush, VanHappy, BigWeb, and later stores; they still receive the same

@@ -43,7 +43,7 @@ class TelegramPriceBot:
             CommandHandler("start", self.start),
             CommandHandler(("price", "compare"), self.price),
             CommandHandler("sites", self.sites),
-            CallbackQueryHandler(self.select_card, pattern=r"^card:\d+$"),
+            CallbackQueryHandler(self.select_card, pattern=r"^card:-?\d+$"),
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.free_text),
         ]
 
@@ -78,7 +78,12 @@ class TelegramPriceBot:
             await message.reply_text("Try a card name, such as: /price Youthberk")
             return
 
-        cards = self.catalogue.search(query, rarity=rarity, limit=MAX_CHOICES, japanese_only=True)
+        serial_card = self.catalogue.lookup_japanese_serial(raw_query)
+        cards = (
+            [serial_card]
+            if serial_card
+            else self.catalogue.search(query, rarity=rarity, limit=MAX_CHOICES, japanese_only=True)
+        )
         if not cards:
             suffix = f" with rarity {rarity}" if rarity else ""
             await message.reply_text(
@@ -103,7 +108,7 @@ class TelegramPriceBot:
         if selected_id not in allowed_ids:
             await callback.answer("That search selection has expired. Please search again.", show_alert=True)
             return
-        card = self.catalogue.get(selected_id, japanese_only=True)
+        card = self.catalogue.get_user_selection(selected_id)
         if not card:
             await callback.answer("That card is no longer in the local catalogue.", show_alert=True)
             return

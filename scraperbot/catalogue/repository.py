@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import sqlite3
 from typing import Iterable
 
@@ -837,6 +838,57 @@ class CatalogueRepository:
         ).fetchone()
         return self._to_card(row) if row else None
 
+    def get_user_selection(self, selection_id: int) -> CardPrint | None:
+        """Resolve a stored card or an ephemeral Japanese-serial selection.
+
+        Negative identifiers refer to a Japanese master record selected by its
+        serial. They deliberately avoid writing a placeholder English name to
+        the catalogue while still allowing exact-print store comparisons.
+        """
+        if selection_id >= 0:
+            return self.get(selection_id, japanese_only=True)
+        japanese = self.connection.execute(
+            "SELECT * FROM japanese_prints WHERE id = ?", (-selection_id,)
+        ).fetchone()
+        return self._serial_selection_from_japanese(japanese) if japanese else None
+
+    def lookup_japanese_serial(self, value: str) -> CardPrint | None:
+        """Resolve one formatted Japanese serial without accepting bare numbers.
+
+        This is Japanese-print only. It accepts punctuation and spacing
+        variants such as ``D-PR/953``, ``DPR953``, and ``D-PR 953`` but does
+        not use English promo references as a user-facing lookup key.
+        """
+        compact = re.sub(r"[^A-Za-z0-9]", "", value).upper()
+        if not compact or not re.search(r"[A-Z]", compact) or not re.search(r"\d", compact):
+            return None
+        set_codes = [
+            str(row["set_code"])
+            for row in self.connection.execute(
+                "SELECT DISTINCT set_code FROM japanese_prints ORDER BY LENGTH(set_code) DESC, set_code"
+            )
+        ]
+        matches: list[sqlite3.Row] = []
+        for set_code in set_codes:
+            if not compact.startswith(set_code):
+                continue
+            supplied_collector = compact.removeprefix(set_code)
+            if not supplied_collector:
+                continue
+            wanted_collector = normalise_collector_number(supplied_collector)
+            rows = self.connection.execute(
+                "SELECT * FROM japanese_prints WHERE set_code = ?", (set_code,)
+            ).fetchall()
+            matches.extend(
+                row
+                for row in rows
+                if self._compact_reference_part(row["collector_number"])
+                == self._compact_reference_part(wanted_collector)
+            )
+        if len(matches) != 1:
+            return None
+        return self._serial_selection_from_japanese(matches[0])
+
     def unmapped_japanese_count(self, set_code: str | None = None) -> int:
         conditions = ["m.japanese_print_id IS NULL"]
         values: list[object] = []
@@ -1085,6 +1137,36 @@ class CatalogueRepository:
     @staticmethod
     def _normalised_set_codes(set_codes: Iterable[str]) -> list[str]:
         return sorted({normalise_set_code(set_code) for set_code in set_codes if set_code.strip()})
+
+    def _serial_selection_from_japanese(self, japanese: sqlite3.Row) -> CardPrint:
+        mapped = self.connection.execute(
+            """
+            SELECT * FROM card_prints
+            WHERE set_code = ? AND collector_number = ?
+              AND japanese_name IS NOT NULL AND TRIM(japanese_name) != ''
+            ORDER BY id
+            LIMIT 1
+            """,
+            (japanese["set_code"], japanese["collector_number"]),
+        ).fetchone()
+        if mapped:
+            return self._to_card(mapped)
+        # No English mapping is created. The Japanese title is an explicit
+        # serial-only display label, sufficient for exact retailer matching.
+        return CardPrint(
+            id=-int(japanese["id"]),
+            set_code=japanese["set_code"],
+            collector_number=japanese["collector_number"],
+            rarity=japanese["rarity"],
+            english_name=japanese["japanese_name"],
+            japanese_name=japanese["japanese_name"],
+            source="japanese-serial-only",
+            source_url=japanese["source_url"],
+        )
+
+    @staticmethod
+    def _compact_reference_part(value: str) -> str:
+        return re.sub(r"[^A-Za-z0-9]", "", value).upper()
 
     def _upsert_japanese(self, card: JapaneseCardPrint) -> sqlite3.Row:
         if not card.japanese_name:
