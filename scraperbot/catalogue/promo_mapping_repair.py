@@ -6,18 +6,8 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
-from scraperbot.catalogue.repository import CatalogueRepository
-from scraperbot.models import EnglishNameMapping, normalise_set_code
-
-
-UTILITY_PROMO_NAME_MAPPINGS = {
-    "エネルギー": ("Energy", ()),
-    "エネルギージェネレーター": ("Energy Generator", ()),
-    "四精織り成す清浄の盾": (
-        "Elementaria Sanctitude",
-        ("Quick Shield", "Quickshield"),
-    ),
-}
+from scraperbot.catalogue.repository import CatalogueRepository, HELD_UTILITY_PROMO_NAMES
+from scraperbot.models import normalise_set_code
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +16,7 @@ class PromoMappingRepairResult:
     removed_user_search_records: int
     restored_direct_fandom: int
     mapped_by_japanese_name: int
-    mapped_shared_utility_names: int
+    held_utility_prints: int
     unresolved: int
 
 
@@ -38,10 +28,10 @@ def repair_promo_mappings(
 
     Existing direct Fandom links are retained. Remaining promo prints can
     inherit one unambiguous direct Fandom English name from a non-promo
-    Japanese printing. Energy, Energy Generator, and Quick Shield prints use
-    their shared reviewed names, so a single name search can list all of their
-    Japanese promo printings. English promo references are archived for
-    internal cross-print research and are never Japanese identity evidence.
+    Japanese printing. Energy, Energy Generator, and Quick Shield printings
+    are deliberately left without English search mappings while their shared
+    utility-card workflow is on hold. English promo references are archived
+    for internal cross-print research and are never Japanese identity evidence.
     """
     wanted = tuple(sorted({normalise_set_code(code) for code in set_codes if code.strip()}))
     if not wanted:
@@ -59,29 +49,15 @@ def repair_promo_mappings(
         restored = catalogue.apply_name_mappings(direct_mappings).mapped
         inferred = catalogue.unambiguous_fandom_name_mappings(wanted)
         name_matched = catalogue.apply_name_mappings(inferred).mapped
-        utility_mappings = [
-            EnglishNameMapping(
-                set_code=card.set_code,
-                collector_number=card.collector_number,
-                rarity=card.rarity,
-                english_name=UTILITY_PROMO_NAME_MAPPINGS[card.japanese_name][0],
-                aliases=UTILITY_PROMO_NAME_MAPPINGS[card.japanese_name][1],
-                source="promo-utility-review",
-                source_url="local://user-approved-promo-utility-names",
-                status="reviewed",
-            )
-            for card in promo_prints
-            if card.japanese_name in UTILITY_PROMO_NAME_MAPPINGS
-        ]
-        shared_utility = catalogue.apply_name_mappings(utility_mappings).mapped
         remaining = catalogue.unmapped_japanese_prints(wanted)
+        held_utility = sum(card.japanese_name in HELD_UTILITY_PROMO_NAMES for card in remaining)
         return PromoMappingRepairResult(
             archived_english_references=archived,
             removed_user_search_records=removed,
             restored_direct_fandom=restored,
             mapped_by_japanese_name=name_matched,
-            mapped_shared_utility_names=shared_utility,
-            unresolved=len(remaining),
+            held_utility_prints=held_utility,
+            unresolved=len(remaining) - held_utility,
         )
 
 
@@ -104,8 +80,8 @@ def main() -> None:
         f"{result.archived_english_references} English references; removed "
         f"{result.removed_user_search_records} stale search records; restored "
         f"{result.restored_direct_fandom} direct Fandom mappings; mapped "
-        f"{result.mapped_by_japanese_name} by exact Japanese name; mapped "
-        f"{result.mapped_shared_utility_names} shared utility prints; "
+        f"{result.mapped_by_japanese_name} by exact Japanese name; held "
+        f"{result.held_utility_prints} utility prints; "
         f"{result.unresolved} playable prints still need review."
     )
 

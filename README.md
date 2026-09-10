@@ -151,9 +151,9 @@ scraperbot-repair-promo-mappings
 The command removes stale Japanese-facing D-PR search records, preserves the
 official English promo catalogue only as internal reference data, restores
 direct Fandom links, and maps a promo to a main-set card only when its exact
-Japanese name has one unambiguous Fandom name. It also records the shared
-English labels for Energy, Energy Generator, and Quick Shield printings, so a
-name search returns all their Japanese printings together. It never assumes an
+Japanese name has one unambiguous Fandom name. Energy, Energy Generator, and
+Quick Shield printings are deliberately held without English search mappings
+until their shared utility-card workflow is resumed. It never assumes an
 English and Japanese D-PR serial with the same number are the same card.
 
 When Bushiroad later publishes an English print, the official-English importer

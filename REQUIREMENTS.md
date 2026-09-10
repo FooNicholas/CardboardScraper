@@ -70,7 +70,7 @@
 | --- | --- | --- |
 | Core catalogue and comparison | Complete | English fuzzy search, Japanese-print selection, local browser and Telegram interfaces, and exact-print comparisons from Yuyu-Tei, BigWeb, Card Rush, and VanHappy. |
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
-| Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official promo links are blocked and archived as internal English references. The local D-PR repair cleared 1,694 prior search records, archived 1,103 English references, restored direct Fandom links, remapped exact Japanese-name matches, and added shared Energy, Energy Generator, and Quick Shield results. `D-PR/953` → Leuhan is covered by regression tests. |
+| Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official promo links are blocked and archived as internal English references. The local D-PR repair cleared 1,694 prior search records, archived 1,103 English references, and restored direct Fandom and exact Japanese-name matches. Energy, Energy Generator, and Quick Shield mappings are explicitly on hold. `D-PR/953` → Leuhan is covered by regression tests. |
 | Promo catalogue ingestion | Planned | Crawl Yuyu-Tei D Promo catalogue pages, including their serial ranges and product locations, into a resumable local import. |
 | Promo identity enrichment | In progress | The safe automatic D-PR repair is complete. 1,180 current D-PR prints still lack an unambiguous reviewed English name and require explicit Fandom evidence or a review decision before they enter user search. |
 | One-time translation review | Planned | Translate only unresolved playable or Energy names during import; persist the approved English search name and provenance locally. No user search may trigger a translation. |
@@ -94,8 +94,7 @@
    for every accepted result.
 4. **Complete:** a promo is mapped automatically only when its exact Japanese
    name has one verified English candidate. Energy, Energy Generator, and
-   Quick Shield share approved English search names and may appear together in
-   results.
+   Quick Shield mappings are held pending a dedicated utility-card workflow.
 5. **Next:** put ambiguous, missing, or conflicting Japanese names into a review queue.
    A one-time translation is allowed only for these entries; save the approved
    English name, source, reviewer decision, and timestamp. Never overwrite a

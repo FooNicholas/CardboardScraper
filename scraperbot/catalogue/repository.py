@@ -15,6 +15,17 @@ from scraperbot.models import CardPrint, EnglishNameMapping, JapaneseCardPrint, 
 
 PROMO_PRINT_SET_CODES = frozenset({"DPR", "CP"})
 
+# These shared-name utility prints remain in the Japanese master while their
+# user-facing search and selection workflow is on hold. Do not add a generic
+# English mapping during an ordinary Fandom or repair import.
+HELD_UTILITY_PROMO_NAMES = frozenset(
+    {
+        "エネルギー",
+        "エネルギージェネレーター",
+        "四精織り成す清浄の盾",
+    }
+)
+
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -182,6 +193,11 @@ class CatalogueRepository:
                 # false official match (for example JP D-PR/953 and EN
                 # D-PR/953EN name different cards).
                 is_region_specific_promo = japanese["set_code"] in PROMO_PRINT_SET_CODES
+                if (
+                    is_region_specific_promo
+                    and japanese["japanese_name"] in HELD_UTILITY_PROMO_NAMES
+                ):
+                    continue
                 if is_region_specific_promo:
                     # An upgrade may encounter legacy official promo records
                     # before the explicit repair command runs. Preserve them

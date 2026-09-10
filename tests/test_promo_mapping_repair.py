@@ -51,7 +51,7 @@ def test_repair_replaces_false_promo_serial_mapping_with_fandom_name_match(tmp_p
 
     assert result.archived_english_references == 1
     assert result.mapped_by_japanese_name == 1
-    assert result.mapped_shared_utility_names == 1
+    assert result.held_utility_prints == 1
     assert result.unresolved == 0
     with CatalogueRepository(database) as catalogue:
         leuhan = catalogue.search("leuhan", japanese_only=True)
@@ -59,10 +59,8 @@ def test_repair_replaces_false_promo_serial_mapping_with_fandom_name_match(tmp_p
         assert repaired.collector_number == "953"
         assert repaired.english_name == "Guard Running Through The Earth, Leuhan"
         assert not catalogue.search("nebula knight of glory", japanese_only=True)
-        energy = next(card for card in catalogue.search("energy", japanese_only=True) if card.set_code == "DPR")
-        assert energy.collector_number == "1000"
-        assert energy.english_name == "Energy"
-        assert catalogue.unmapped_japanese_count("DPR") == 0
+        assert not catalogue.search("energy", japanese_only=True)
+        assert catalogue.unmapped_japanese_count("DPR") == 1
         archived = catalogue.connection.execute(
             "SELECT english_name FROM english_print_references WHERE set_code = 'DPR' AND collector_number = '953'"
         ).fetchone()
