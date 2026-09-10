@@ -22,7 +22,14 @@ def format_comparison(result: ComparisonResult) -> str:
         for offer in result.offers:
             store = escape(offer.store_name)
             price = escape(offer.price_display)
-            availability = " — OOS" if offer.availability == Availability.SOLD_OUT else ""
+            if offer.stock_count is not None:
+                availability = f" — {offer.stock_count} left"
+            elif offer.availability == Availability.SOLD_OUT:
+                availability = " — ×"
+            elif offer.availability == Availability.IN_STOCK:
+                availability = " — ◯"
+            else:
+                availability = ""
             if offer.listing_url:
                 lines.append(f'<a href="{escape(offer.listing_url, quote=True)}">{store}</a>: {price}{availability}')
             else:

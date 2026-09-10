@@ -51,18 +51,22 @@ class YuyuTeiConnector(StoreConnector):
             stock_label_text = stock_label.get_text(" ", strip=True) if stock_label else item_text
             price = price_from_text(price_element.get_text(" ", strip=True))
             if stock_match:
-                availability = Availability.SOLD_OUT if int(stock_match.group(1)) == 0 else Availability.IN_STOCK
+                stock_count = int(stock_match.group(1))
+                availability = Availability.SOLD_OUT if stock_count == 0 else Availability.IN_STOCK
             elif "◯" in stock_label_text or "○" in stock_label_text:
                 # Current sell pages use a circle rather than a numeric stock
                 # count. It means the card can be added to the cart.
+                stock_count = None
                 availability = Availability.IN_STOCK
             elif (
                 any(marker in stock_label_text for marker in ("×", "✕", "✖"))
                 or item.select_one(".sold-out") is not None
                 or any(marker in item_text for marker in ("在庫なし", "売り切れ", "SOLD OUT"))
             ):
+                stock_count = None
                 availability = Availability.SOLD_OUT
             else:
+                stock_count = None
                 availability = Availability.UNKNOWN
             if price is not None:
                 price_display = f"¥{price:,}"
@@ -78,6 +82,7 @@ class YuyuTeiConnector(StoreConnector):
                     availability=availability,
                     listing_url=urljoin(cls.base_url, card_link["href"]) if card_link else None,
                     match_confidence=MatchConfidence.EXACT_PRINT,
+                    stock_count=stock_count,
                 )
             )
         return offers

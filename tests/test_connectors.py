@@ -39,6 +39,7 @@ def test_bigweb_matches_public_api_print_reference() -> None:
     assert len(offers) == 1
     assert offers[0].price_yen == 1200
     assert offers[0].availability == Availability.IN_STOCK
+    assert offers[0].stock_count == 1
     assert offers[0].listing_url.endswith("3576107")
 
 
@@ -56,6 +57,7 @@ def test_yuyutei_matches_print_reference_without_translating() -> None:
     assert len(offers) == 1
     assert offers[0].raw_name == "エグザサベイト・ドラゴン"
     assert offers[0].price_yen == 1280
+    assert offers[0].stock_count == 4
     assert offers[0].listing_url == "https://yuyu-tei.jp/sell/vg/card/dzbt16/999"
 
 
@@ -68,6 +70,7 @@ def test_yuyutei_marks_an_explicit_zero_stock_listing_sold_out() -> None:
     assert offer.availability == Availability.SOLD_OUT
     assert offer.price_display == "¥1,280"
     assert offer.price_yen == 1280
+    assert offer.stock_count == 0
 
 
 def test_yuyutei_marks_a_circle_stock_indicator_in_stock() -> None:
@@ -79,6 +82,7 @@ def test_yuyutei_marks_a_circle_stock_indicator_in_stock() -> None:
     assert offer.availability == Availability.IN_STOCK
     assert offer.price_yen == 420
     assert offer.price_display == "¥420"
+    assert offer.stock_count is None
 
 
 def test_yuyutei_does_not_label_an_unknown_stock_state_sold_out() -> None:
@@ -102,6 +106,7 @@ def test_yuyutei_marks_a_cross_stock_indicator_out_of_stock_and_keeps_its_price(
     assert offer.availability == Availability.SOLD_OUT
     assert offer.price_yen == 980
     assert offer.price_display == "¥980"
+    assert offer.stock_count is None
 
 
 def test_bigweb_keeps_the_displayed_price_for_an_out_of_stock_print() -> None:
@@ -121,3 +126,4 @@ def test_bigweb_keeps_the_displayed_price_for_an_out_of_stock_print() -> None:
     assert offers[0].availability == Availability.SOLD_OUT
     assert offers[0].price_yen == 980
     assert offers[0].price_display == "¥980"
+    assert offers[0].stock_count == 0

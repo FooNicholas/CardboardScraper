@@ -111,7 +111,9 @@ class BigWebConnector(StoreConnector):
                 reference = f"{cardset.get('slip', '')}/{(item.get('rarity') or {}).get('slip', '')}"
             if not references_card(card, reference):
                 continue
-            sold_out = bool(item.get("is_sold_out")) or int(item.get("stock_count") or 0) <= 0
+            raw_stock_count = item.get("stock_count")
+            stock_count = int(raw_stock_count) if raw_stock_count is not None else None
+            sold_out = bool(item.get("is_sold_out")) or stock_count == 0
             price = int(item["price"]) if item.get("price") is not None else None
             condition = ((item.get("condition") or {}).get("name") or "").strip() or None
             offers.append(
@@ -125,6 +127,7 @@ class BigWebConnector(StoreConnector):
                     listing_url=f"https://www.bigweb.co.jp/ja/products/vg/cardViewer/{item['id']}",
                     match_confidence=MatchConfidence.EXACT_PRINT,
                     condition=condition,
+                    stock_count=stock_count,
                 )
             )
         return offers

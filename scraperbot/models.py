@@ -126,6 +126,7 @@ class StoreOffer:
     match_confidence: MatchConfidence
     condition: str | None = None
     direction: str = "retail"
+    stock_count: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

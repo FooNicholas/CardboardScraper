@@ -23,7 +23,12 @@ class FixedConnector(StoreConnector):
         return self.outcome
 
 
-def offer(store: str, price: int, availability: Availability = Availability.IN_STOCK) -> StoreOffer:
+def offer(
+    store: str,
+    price: int,
+    availability: Availability = Availability.IN_STOCK,
+    stock_count: int | None = None,
+) -> StoreOffer:
     return StoreOffer(
         store_id=store,
         store_name=store.title(),
@@ -33,6 +38,7 @@ def offer(store: str, price: int, availability: Availability = Availability.IN_S
         availability=availability,
         listing_url=f"https://example.test/{store}",
         match_confidence=MatchConfidence.EXACT_PRINT,
+        stock_count=stock_count,
     )
 
 
@@ -71,8 +77,15 @@ def test_comparison_reports_a_store_with_no_active_listing() -> None:
 
 def test_comparison_labels_an_out_of_stock_price() -> None:
     result = asyncio.run(
-        ComparisonService([FixedConnector("store", [offer("store", 980, Availability.SOLD_OUT)])]).compare(CARD)
+        ComparisonService(
+            [FixedConnector("store", [offer("store", 980, Availability.SOLD_OUT, stock_count=0)])]
+        ).compare(CARD)
     )
     rendered = format_comparison(result)
     assert "¥980" in rendered
-    assert "OOS" in rendered
+    assert "0 left" in rendered
+
+
+def test_comparison_includes_a_listed_stock_count() -> None:
+    result = asyncio.run(ComparisonService([FixedConnector("store", [offer("store", 420, stock_count=3)])]).compare(CARD))
+    assert "3 left" in format_comparison(result)

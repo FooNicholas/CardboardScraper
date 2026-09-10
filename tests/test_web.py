@@ -23,6 +23,7 @@ class FixedConnector(StoreConnector):
                 availability=Availability.IN_STOCK,
                 listing_url="https://example.test/listing",
                 match_confidence=MatchConfidence.EXACT_JAPANESE_NAME,
+                stock_count=3,
             )
         ]
 
@@ -58,6 +59,7 @@ def test_local_web_search_and_comparison_share_the_catalogue(tmp_path: Path) -> 
         comparison = asyncio.run(app.compare(card.id or 0))
         assert comparison["offers"][0]["store_name"] == "Example Store"
         assert comparison["offers"][0]["match_confidence"] == "exact_japanese_name"
+        assert comparison["offers"][0]["stock_count"] == 3
 
 
 def test_local_web_hides_english_only_prints(tmp_path: Path) -> None:
