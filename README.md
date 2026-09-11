@@ -277,20 +277,41 @@ avoid ambiguity across product families.
 Export only Yuyu-Tei-listed D-PR prints that still lack a safe English mapping:
 
 ```sh
-scraperbot-promo-review export data/dpr-promo-name-review.json
+scraperbot-promo-review export data/dpr-promo-name-review-fresh.json
 ```
 
-Review the JSON locally. Set an entry's `status` to `approved`, fill in its
+Use a new filename each time: export refuses to overwrite existing reviews.
+The version-2 queue records the current canonical Japanese name and source,
+the official PR identity where available, and the retailer title separately.
+It includes exact-name candidate evidence from the same regional-safe
+official/Fandom sources used by the automatic repair. Conflicting candidates
+are shown together; none is automatically selected or translated.
+
+Review the JSON locally. Keep the identity fields unchanged. Set an entry's `status` to `approved`, fill in its
 English name, optional aliases, and (when available) the Fandom source URL.
 Then apply it with:
 
 ```sh
-scraperbot-promo-review apply data/dpr-promo-name-review.json
+scraperbot-promo-review apply data/dpr-promo-name-review-fresh.json
 ```
 
 Only approved records that match a stored Yuyu-Tei D-PR entry are imported.
+Each approval must still match the current Japanese identity and source, and
+the print must remain unmapped. Stale/missing identities, official-name
+conflicts, duplicate approvals, invalid names/aliases and already-resolved
+prints are skipped with a reason. Legacy version-1 files require a matching
+`japanese_name`; re-export older files that lack it. Imports affect only the
+explicitly approved serials, not other same-name promos. General automatic
+name repair remains a separate workflow. An existing mapping cannot be
+replaced by this unresolved-name review command.
 Energy, Energy Generator, Quick Shield, and Persona Shield entries are marked
 `held` (intentionally serial-only). Their English mapping is not required.
+
+The local `data/dpr-promo-name-review-2026-09-11-v2.json` snapshot contains
+486 entries: 327 playable prints without eligible exact-name evidence,
+44 with conflicting candidates, and 115 serial-only utility prints.
+It is an unapproved review artifact, not a new mapping import; the original
+review file has been preserved.
 
 When Bushiroad later publishes an English print, the official-English importer
 always preserves that name rather than replacing it with a Fandom mapping.

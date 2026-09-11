@@ -54,6 +54,11 @@
   merely because it is absent from this table.
 - Preserve approved English reviews when Japanese identity is unchanged;
   invalidate English evidence if the authoritative Japanese name changes.
+- Review exports must use canonical Japanese identities, retain retailer titles
+  separately, and include regional-safe exact-name evidence without choosing
+  between conflicts. Never overwrite a prior review file. Apply only explicit
+  approvals for still-unmapped serials whose Japanese identity is unchanged;
+  reject stale identities, duplicate approvals and invalid values with reasons.
 - Keep utility cards searchable by Japanese serial without an English mapping;
   those shared names must not seed playable-card matches. Existing internal
   `held` flags mean intentionally excluded from translation, not pending work.
@@ -87,6 +92,14 @@
 
 ## Known defects
 
+- **BUG-REVIEW-001 — Corrected.** Review export formerly used retailer titles,
+  and apply did not verify the reviewed Japanese name against the current
+  master. A stale file could therefore restore an incorrect mapping after an
+  official identity correction. Version-2 exports retain canonical identity
+  and evidence; apply validates identity/source under the same transaction as
+  its writes, rejects already-mapped targets, and maps only approved serials.
+  Null English names are no longer coerced into the literal string `None`.
+
 - **BUG-REGION-001 — Corrected for the current local regional catalogue.** The
   official-English linker previously treated equal Japanese and English serials
   as identical. This first caused the reported `D-PR/953` error and also made
@@ -113,6 +126,7 @@
 | Promo catalogue ingestion | Complete for current Yuyu-Tei scan | `scraperbot-import-yuyutei-promos --all` discovered every current numeric D-Promo group and stored 1,444 exact D-PR entries (numeric serials `1–1757`) from actual Yuyu-Tei listings. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. Empty range groups remain eligible for later refresh. |
 | Promo identity enrichment | Review workflow complete — content review pending | Current Yuyu-Tei scope: 1,444 entries, 958 English-mapped, 371 unresolved playable, and 115 intentionally serial-only utility entries. Existing exported JSON is historical; export to a new file to obtain the current queue. `apply` accepts explicit approvals with provenance. |
 | One-time translation review | Ready for reviewed input | Current D-PR data has 545 unresolved playable/upcoming prints: 472 without an eligible exact-name candidate and 73 with conflicting names. Review only playable cards; 210 utility prints intentionally require no English mapping. No user search may trigger a translation. |
+| Evidence-backed review and stale-approval protection | Implemented | Version-2 review exports use canonical/official Japanese identity, separate retailer titles, and shared regional-safe candidate evidence. Export preserves existing files; apply rejects stale/duplicate/invalid approvals and resolved targets with reasons. Fresh local Yuyu-Tei queue: 327 no-candidate playable prints, 44 conflicting-candidate playable prints, 115 serial-only utility prints. No mappings were applied. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
 | Finish / holo metadata | Implemented | Canonical Japanese prints and store offers retain raw finish text plus a normalised holo/standard/unknown value. A Yuyu-Tei D-PR title marked `H仕様` enriches that exact Japanese serial's local print record as holo and is displayed in search results; an explicitly conflicting retailer finish is excluded from an exact-print comparison. |
 | Rarity and finish filters | Implemented | The browser offers multi-select rarity and finish controls; Telegram and the search API accept `rarity:FFR,SEC` and `finish:holo`. The trailing-rarity shortcut remains supported. Unknown-finish printings stay visible when filtering by holo or standard. |
@@ -154,6 +168,9 @@ English mappings. Database counts describe print records, not distinct card name
    explicitly approved entries; save the English name and source. Energy,
    Energy Generator, and shield records remain serial-only. Never overwrite
    a reviewed mapping merely because another region reuses its serial number.
+   **Hardened:** version-2 exports include current canonical identity and
+   exact-name evidence; imports reject stale approvals and do not overwrite
+   newly resolved mappings or propagate manual approvals to unapproved serials.
 6. Add regression tests for corrected, rejected, and ambiguous D-PR mappings,
    including a Card Rush exact-print fixture for the reported product. The
    audit must pass before any bulk promo import writes user-searchable English
@@ -173,6 +190,9 @@ English mappings. Database counts describe print records, not distinct card name
    mapping. Remaining playable names still need explicit cross-print evidence
    or reviewed, one-time translation. Re-export the Yuyu-Tei review queue to a
    new file after a repair; old exported counts are historical snapshots.
+   The fresh `data/dpr-promo-name-review-2026-09-11-v2.json` queue contains 371
+   unresolved playable entries (327 no eligible candidate, 44 conflicts) and
+   115 intentionally serial-only utility entries. No entries are approved.
 10. **Complete:** Japanese serial normalisation and exact lookup work in the
    catalogue search API, Telegram handler, and browser UI. Formatted serials
    resolve directly; bare numbers are rejected as ambiguous. An unmapped

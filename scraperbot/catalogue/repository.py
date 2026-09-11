@@ -261,7 +261,9 @@ class CatalogueRepository:
         self.connection.commit()
         return imported
 
-    def apply_name_mappings(self, mappings: Iterable[EnglishNameMapping]) -> MappingImportResult:
+    def apply_name_mappings(
+        self, mappings: Iterable[EnglishNameMapping], *, derive_same_name: bool = True
+    ) -> MappingImportResult:
         """Layer community English names over the Japanese print master.
 
         A matching official-English card is never overwritten. Its publication
@@ -386,7 +388,9 @@ class CatalogueRepository:
             # omit its FFR/SR/SEC parallel rows. Official Japanese data gives
             # those rows the same Japanese name, so they can safely inherit
             # that already-trusted English name without a machine translation.
-            for (set_code, japanese_name), source_mapping in mappings_by_japanese_name.items():
+            for (set_code, japanese_name), source_mapping in (
+                mappings_by_japanese_name.items() if derive_same_name else ()
+            ):
                 rows = self.connection.execute(
                     """
                     SELECT j.* FROM japanese_prints AS j
@@ -760,6 +764,24 @@ class CatalogueRepository:
         ).fetchall()
         return [self._to_promo_entry(row) for row in rows]
 
+    def eligible_name_mapping_evidence(self) -> list[sqlite3.Row]:
+        """Share the regional-safe exact-name evidence used by repair and review."""
+        rows = self.connection.execute(
+            """
+            SELECT j.set_code, j.collector_number, j.japanese_name, m.english_name,
+                   m.aliases_json, m.mapping_source, m.mapping_source_url
+            FROM japanese_prints AS j
+            JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+            WHERE j.set_code NOT IN ('DPR', 'CP')
+              AND m.mapping_source IN ('fandom', 'fandom-cross-print', 'official-english')
+            ORDER BY CASE WHEN m.mapping_source='official-english' THEN 0 ELSE 1 END,
+                     m.imported_at DESC, j.set_code, j.collector_number
+            """
+        ).fetchall()
+        return [row for row in rows if not (
+            row['mapping_source'] == 'official-english' and is_region_specific_print_set(row['set_code'])
+        )]
+
     def unambiguous_fandom_name_mappings(self, set_codes: Iterable[str]) -> list[EnglishNameMapping]:
         """Map prints from one exact Japanese-name official/Fandom candidate.
 
@@ -780,22 +802,8 @@ class CatalogueRepository:
             """,
             wanted,
         ).fetchall()
-        source_rows = self.connection.execute(
-            """
-            SELECT j.set_code, j.japanese_name, m.english_name, m.aliases_json,
-                   m.mapping_source, m.mapping_source_url
-            FROM japanese_prints AS j
-            JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
-            WHERE j.set_code NOT IN ('DPR', 'CP')
-              AND m.mapping_source IN ('fandom', 'fandom-cross-print', 'official-english')
-            ORDER BY CASE WHEN m.mapping_source='official-english' THEN 0 ELSE 1 END,
-                     m.imported_at DESC
-            """
-        ).fetchall()
         candidates: dict[str, dict[str, sqlite3.Row]] = {}
-        for row in source_rows:
-            if row['mapping_source'] == 'official-english' and is_region_specific_print_set(row['set_code']):
-                continue
+        for row in self.eligible_name_mapping_evidence():
             candidates.setdefault(str(row["japanese_name"]), {}).setdefault(str(row["english_name"]), row)
         mappings: list[EnglishNameMapping] = []
         for target in target_rows:
