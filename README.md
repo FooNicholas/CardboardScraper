@@ -32,7 +32,7 @@ only after the user has chosen it.
   retained as reference-only data for a future reviewed cross-region feature.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush,
   VanHappy, Card Shop Olta, Manzokuya, Mana Source, FullAhead, Amenity Dream,
-  and Torecolo. Every connector uses a narrow Japanese-serial lookup and
+  Torecolo, Card Max, Cardshop Avalon, C-labo, and REALiZE. Every connector uses a narrow Japanese-serial lookup and
   requires an exact printed reference before reporting a price.
 - Card Shop Olta preserves its per-condition SKU price and exact quantity.
   Manzokuya preserves a numeric quantity when shown (or a circle/cross stock
@@ -48,6 +48,9 @@ only after the user has chosen it.
 - FullAhead enriches its search result from the selected product page to retain
   the displayed stock quantity. Amenity Dream and Torecolo provide price and
   stock directly in their public search results, including sold-out prices.
+- Card Max, Cardshop Avalon, and REALiZE read the quantity displayed on only
+  the exact matched product page. C-labo retains its public search row's price
+  when it is explicitly sold out.
 - A local Telegram long-polling runner. Deployment/webhook hosting is
   deliberately not included yet.
 

@@ -6,11 +6,15 @@ import httpx
 from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardrush import CardRushConnector
 from scraperbot.connectors.amenitydream import AmenityDreamConnector
+from scraperbot.connectors.avalon import AvalonConnector
+from scraperbot.connectors.cardmax import CardMaxConnector
+from scraperbot.connectors.clabo import CLaboConnector
 from scraperbot.connectors.fullahead import FullAheadConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
 from scraperbot.connectors.olta import OltaConnector
 from scraperbot.connectors.torecolo import TorecoloConnector
+from scraperbot.connectors.realize import RealizeConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
 from scraperbot.models import Availability, CardPrint
@@ -415,6 +419,50 @@ def test_torecolo_matches_its_hyphenated_product_code_and_keeps_oos_price() -> N
         (980, Availability.SOLD_OUT, 0),
     ]
     assert offers[0].listing_url == "https://www.torecolo.jp/shop/g/gDZ-BT16-FFR02/"
+
+
+def test_cardmax_matches_exact_serial_and_uses_detail_stock() -> None:
+    search_html = """
+    <table><tr><td><a href="/shop/shopdetail.html?brandcode=1"><img alt="DZBT16 エグザサベイト・ドラゴン(FFR)(DZBT16/FFR02)"></a></td><td>1,280円</td></tr>
+    <tr><td><a href="/shop/shopdetail.html?brandcode=2">別のカード (DZBT16/FFR03)</a></td><td>100円</td></tr></table>
+    """
+    offers = CardMaxConnector.parse_html(CARD, search_html)
+    assert len(offers) == 1
+    detailed = CardMaxConnector._with_detail_stock(offers[0], '<span class="M_item-stock-smallstock">残りあと2個</span>')
+    assert (detailed.price_yen, detailed.availability, detailed.stock_count) == (1280, Availability.IN_STOCK, 2)
+
+
+def test_avalon_matches_exact_serial_and_uses_detail_stock() -> None:
+    search_html = """
+    <ul class="product"><li><a href="?pid=1">DZ-BT16/FFR02 エグザサベイト・ドラゴン FFR</a><span class="price">1,280円(税込1,408円)</span></li>
+    <li><a href="?pid=2">DZ-BT16/FFR03 別のカード</a><span class="price">100円</span></li></ul>
+    """
+    offers = AvalonConnector.parse_html(CARD, search_html)
+    assert len(offers) == 1
+    detailed = AvalonConnector._with_detail_stock(offers[0], "<td class='mark'>在庫6つです！</td>")
+    assert (detailed.price_yen, detailed.availability, detailed.stock_count) == (1280, Availability.IN_STOCK, 6)
+
+
+def test_clabo_matches_exact_serial_and_retains_sold_out_price() -> None:
+    html = """
+    <div class="list_item_cell"><a href="/product/1"><p class="item_name"><span class="goods_name">【VG】エグザサベイト・ドラゴン【FFR】DZ-BT16/FFR02</span></p>
+    <span class="figure">1,280円</span><p class="stock soldout">在庫なし</p></a></div>
+    <div class="list_item_cell"><a href="/product/2"><span class="goods_name">別のカード DZ-BT16/FFR03</span><span>100円</span></a></div>
+    """
+    offers = CLaboConnector.parse_html(CARD, html)
+    assert len(offers) == 1
+    assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (1280, Availability.SOLD_OUT, None)
+
+
+def test_realize_matches_exact_serial_and_uses_detail_stock() -> None:
+    search_html = """
+    <li class="productlist-unit"><a href="?pid=1"><img alt="ヴァンガード DZ-BT16/FFR02 エグザサベイト・ドラゴン FFR"></a><span class="price">1,280円</span></li>
+    <li class="productlist-unit"><a href="?pid=2"><img alt="ヴァンガード DZ-BT16/FFR03 別のカード"></a><span class="price">100円</span></li>
+    """
+    offers = RealizeConnector.parse_html(CARD, search_html)
+    assert len(offers) == 1
+    detailed = RealizeConnector._with_detail_stock(offers[0], '"stock_num":14,"sales_price":1280')
+    assert (detailed.price_yen, detailed.availability, detailed.stock_count) == (1280, Availability.IN_STOCK, 14)
 
 
 def test_new_store_connectors_search_by_hyphenated_japanese_serial() -> None:

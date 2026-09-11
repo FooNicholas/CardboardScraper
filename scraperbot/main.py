@@ -9,12 +9,16 @@ from scraperbot.bot import TelegramPriceBot
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.config import Settings
 from scraperbot.connectors.bigweb import BigWebConnector
+from scraperbot.connectors.cardmax import CardMaxConnector
 from scraperbot.connectors.cardrush import CardRushConnector
+from scraperbot.connectors.clabo import CLaboConnector
+from scraperbot.connectors.avalon import AvalonConnector
 from scraperbot.connectors.amenitydream import AmenityDreamConnector
 from scraperbot.connectors.fullahead import FullAheadConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
 from scraperbot.connectors.olta import OltaConnector
+from scraperbot.connectors.realize import RealizeConnector
 from scraperbot.connectors.torecolo import TorecoloConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
@@ -44,6 +48,10 @@ def build_application(settings: Settings | None = None) -> Application:
                 FullAheadConnector(),
                 AmenityDreamConnector(),
                 TorecoloConnector(),
+                CardMaxConnector(),
+                AvalonConnector(),
+                CLaboConnector(),
+                RealizeConnector(),
             )
         ),
     )
