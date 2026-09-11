@@ -38,6 +38,7 @@ scraperbot-repair-regional-mappings = "scraperbot.catalogue.regional_mapping_rep
 scraperbot-import-yuyutei-promos = "scraperbot.catalogue.promo_catalogue_importer:main"
 scraperbot-promo-review = "scraperbot.catalogue.promo_review:main"
 scraperbot-catalogue-status = "scraperbot.catalogue.status:main"
+scraperbot-refresh-catalogue = "scraperbot.catalogue.refresh:main"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

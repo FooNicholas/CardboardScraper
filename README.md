@@ -145,6 +145,17 @@ catalogue report. It makes no store or web requests:
 scraperbot-catalogue-status
 ```
 
+To run the approved-source refresh for newly published catalogue data, use:
+
+```sh
+scraperbot-refresh-catalogue --apply
+```
+
+Add `--refresh-promos` to re-read every saved Yuyu-Tei D-Promo range, or
+`--repair-regional` after importing a D-PR/CP or D/DZ Special Series batch
+whose regional mappings need a full Fandom rebuild. The command never visits
+Cloudflare-protected store pages.
+
 Some English reprints correspond to a Japanese promo with a different card
 number. Map those declared relationships for each relevant English set:
 
