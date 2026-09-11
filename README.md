@@ -24,10 +24,10 @@ only after the user has chosen it.
   `rarity:FFR,SEC` and `finish:holo`. A finish filter intentionally retains
   prints whose finish is not yet labelled rather than guessing they are
   standard.
-- When a search resolves to one verified Japanese reprint family, use the
-  far-right “Sort by lowest” filter-style button to compare all of them
-  immediately—no individual print selection required. Offers remain labelled
-  with their own print code, rarity, finish, stock, and availability.
+- Use the far-right “Sort by lowest” filter-style button to order listed
+  offers immediately, including when a card has only one Japanese printing.
+  Offers remain labelled with their own print code, rarity, finish, stock, and
+  availability.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as an English-name mapping source.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and

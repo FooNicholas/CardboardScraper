@@ -69,6 +69,10 @@ def test_local_web_search_and_comparison_share_the_catalogue(tmp_path: Path) -> 
         assert comparison["offers"][0]["stock_count"] == 3
         assert comparison["family_print_count"] == 1
 
+        lowest = asyncio.run(app.compare_family(card.id or 0))
+        assert lowest["print_count"] == 1
+        assert lowest["offers"][0]["card"]["id"] == card.id
+
 
 def test_local_web_hides_english_only_prints(tmp_path: Path) -> None:
     with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
