@@ -308,7 +308,7 @@ INDEX_HTML = """<!doctype html>
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:radial-gradient(circle at 8% 0%, #fffdf9 0, transparent 31rem), linear-gradient(135deg,var(--paper) 0%,var(--paper-deep) 100%); color:var(--ink); font:16px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     main { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:70px 0 88px; }
-    h1 { margin:0; font-family:ui-serif,Georgia,Cambria,"Times New Roman",serif; font-size:clamp(2.5rem,7vw,4.8rem); font-weight:600; letter-spacing:-.065em; line-height:1; }
+    h1 { margin:0; font-family:ui-serif,Georgia,Cambria,"Times New Roman",serif; font-size:clamp(1.45rem,3vw,2rem); font-weight:600; letter-spacing:-.04em; line-height:1.1; }
     .eyebrow { color:var(--accent); font-weight:750; letter-spacing:.12em; font-size:.74rem; text-transform:uppercase; margin-bottom:13px; }
     .intro { max-width:630px; color:var(--muted); margin:18px 0 34px; }
     .workspace { display:grid; grid-template-columns:minmax(290px,.8fr) minmax(0,1.4fr); gap:40px; align-items:start; margin-top:22px; }
@@ -362,7 +362,7 @@ INDEX_HTML = """<!doctype html>
 </head>
 <body><main>
   <div class="eyebrow">Local card price comparison</div><h1>JP Price Checker</h1>
-  <p class="intro">Search by English card name—even partially spelled—or enter an exact Japanese serial before checking stores.</p>
+  <p class="intro">Search by English card name or serial number</p>
   <form id="search-form"><input id="query" type="search" maxlength="120" autocomplete="off" placeholder="Try: Youthberk, D-PR/953" autofocus><button id="search-button">Search</button></form>
   <div class="hint">Optional rarity at the end: <button type="button" data-query="Youthberk FFR">Youthberk FFR</button><button type="button" data-query="D-PR/953">D-PR/953</button></div>
   <div id="status" aria-live="polite"></div><section id="filters" class="filters" aria-label="Filter matching printings" hidden></section><div class="workspace"><section class="print-panel"><p class="panel-label">Matching printings</p><section id="results" class="result-list"></section></section><section class="price-panel"><p class="panel-label">Price comparison</p><section id="comparison"></section></section></div>
