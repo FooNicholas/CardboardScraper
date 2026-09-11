@@ -23,8 +23,11 @@ from scraperbot.connectors.amenitydream import AmenityDreamConnector
 from scraperbot.connectors.fullahead import FullAheadConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
+from scraperbot.connectors.net193 import Net193Connector
 from scraperbot.connectors.olta import OltaConnector
+from scraperbot.connectors.pao import PAOConnector
 from scraperbot.connectors.realize import RealizeConnector
+from scraperbot.connectors.ryuunoshippo import RyuunoshippoConnector
 from scraperbot.connectors.torecolo import TorecoloConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
@@ -299,6 +302,9 @@ def build_web_application(settings: Settings | None = None) -> LocalPriceCheckWe
                 AvalonConnector(),
                 CLaboConnector(),
                 RealizeConnector(),
+                PAOConnector(),
+                Net193Connector(),
+                RyuunoshippoConnector(),
             )
         ),
     )

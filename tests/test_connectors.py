@@ -10,11 +10,14 @@ from scraperbot.connectors.avalon import AvalonConnector
 from scraperbot.connectors.cardmax import CardMaxConnector
 from scraperbot.connectors.clabo import CLaboConnector
 from scraperbot.connectors.fullahead import FullAheadConnector
+from scraperbot.connectors.net193 import Net193Connector
+from scraperbot.connectors.pao import PAOConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
 from scraperbot.connectors.olta import OltaConnector
 from scraperbot.connectors.torecolo import TorecoloConnector
 from scraperbot.connectors.realize import RealizeConnector
+from scraperbot.connectors.ryuunoshippo import RyuunoshippoConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
 from scraperbot.models import Availability, CardPrint
@@ -463,6 +466,40 @@ def test_realize_matches_exact_serial_and_uses_detail_stock() -> None:
     assert len(offers) == 1
     detailed = RealizeConnector._with_detail_stock(offers[0], '"stock_num":14,"sales_price":1280')
     assert (detailed.price_yen, detailed.availability, detailed.stock_count) == (1280, Availability.IN_STOCK, 14)
+
+
+def test_pao_keeps_sale_price_and_uses_detail_stock() -> None:
+    search_html = """
+    <ul><li class="itemList__unit"><a href="/view/item/1" class="itemWrap"><img alt="エグザサベイト・ドラゴン DZ-BT16/FFR02 FFR">
+    <p class="itemPrice itemPrice--regular">通常価格：1,600円</p><p class="itemPrice itemPrice--sale">1,280円</p></a></li>
+    <li class="itemList__unit"><a href="/view/item/2"><img alt="別のカード DZ-BT16/FFR03"><p class="itemPrice">100円</p></a></li></ul>
+    """
+    offers = PAOConnector.parse_html(CARD, search_html)
+    assert len(offers) == 1
+    detailed = PAOConnector._with_detail_stock(offers[0], "<td class='item-stock'>残りあと2個</td>")
+    assert (detailed.price_yen, detailed.availability, detailed.stock_count) == (1280, Availability.IN_STOCK, 2)
+
+
+def test_193net_accepts_store_rarity_suffix_and_uses_detail_stock() -> None:
+    search_html = """
+    <li class="ec-shelfGrid__item"><a href="/products/detail/1"><img alt="エグザサベイト・ドラゴン 【DZ-BT16/FFR02FFR】"></a><p>￥1,280（税込）</p></li>
+    <li class="ec-shelfGrid__item"><a href="/products/detail/2"><img alt="別のカード 【DZ-BT16/FFR03FFR】"></a><p>￥100</p></li>
+    """
+    offers = Net193Connector.parse_html(CARD, search_html)
+    assert len(offers) == 1
+    detailed = Net193Connector._with_detail_stock(offers[0], "<div>在庫数： <span>20点</span></div><button class='add-cart'>cart</button>")
+    assert (detailed.price_yen, detailed.availability, detailed.stock_count) == (1280, Availability.IN_STOCK, 20)
+
+
+def test_ryuunoshippo_matches_exact_serial_and_reports_stock() -> None:
+    html = """
+    <li class="list_item_cell"><a href="/product/1"><span class="goods_name">エグザサベイト・ドラゴン(FFR)(DZ-BT16/FFR02)</span>
+    <span class="figure">1,280円</span><p class="stock">在庫数2点</p></a></li>
+    <li class="list_item_cell"><a href="/product/2"><span class="goods_name">別のカード DZ-BT16/FFR03</span><span>100円</span></a></li>
+    """
+    offers = RyuunoshippoConnector.parse_html(CARD, html)
+    assert len(offers) == 1
+    assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (1280, Availability.IN_STOCK, 2)
 
 
 def test_new_store_connectors_search_by_hyphenated_japanese_serial() -> None:
