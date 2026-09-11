@@ -30,10 +30,14 @@ only after the user has chosen it.
   availability.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as reference-only data for a future reviewed cross-region feature.
-- Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and
-  VanHappy. Card Rush, VanHappy, and BigWeb search D-PR cards by their Japanese
-  serial, including unmapped promos. Other Card Rush/VanHappy cards use
-  Japanese-name search. All connectors require an exact printed reference.
+- Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush,
+  VanHappy, Card Shop Olta, Manzokuya, and Mana Source. Olta, Manzokuya, and
+  Mana Source search every selected Japanese printing by its Japanese serial;
+  Card Rush, VanHappy, and BigWeb do the same for D-PR cards. All connectors
+  require an exact printed reference before reporting a price.
+- Card Shop Olta preserves its per-condition SKU price and exact quantity.
+  Manzokuya preserves a numeric quantity when shown (or a circle/cross stock
+  state), and Mana Source preserves its listed quantity or sold-out state.
 - English search is identity-first: a name and its aliases resolve to one
   canonical Japanese card name, then return every linked Japanese printing.
   Main-set, Special Series and D-PR reprints sharing that exact Japanese name
@@ -342,8 +346,9 @@ scraperbot-import your-reviewed-cards.json
 Create a connector under `scraperbot/connectors/` that implements
 `StoreConnector.search(card)`. It must return only offers matching the selected
 print reference—not a loose name match—and should raise `StoreUnavailableError`
-when the set is not listed. Register it alongside Yuyu-Tei and BigWeb in
-`scraperbot/main.py`; the comparison service will then query it concurrently.
+when the set is not listed or the store declines the request. Register it in
+both `scraperbot/main.py` and `scraperbot/web.py`; the comparison service will
+then query it concurrently.
 
 ## Design
 

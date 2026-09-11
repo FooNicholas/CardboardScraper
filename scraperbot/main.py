@@ -10,6 +10,9 @@ from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.config import Settings
 from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardrush import CardRushConnector
+from scraperbot.connectors.manasource import ManaSourceConnector
+from scraperbot.connectors.manzokuya import ManzokuyaConnector
+from scraperbot.connectors.olta import OltaConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
 from scraperbot.services.comparison import ComparisonService
@@ -26,7 +29,17 @@ def build_application(settings: Settings | None = None) -> Application:
     )
     bot = TelegramPriceBot(
         catalogue,
-        ComparisonService((yuyutei, BigWebConnector(), CardRushConnector(), VanHappyConnector())),
+        ComparisonService(
+            (
+                yuyutei,
+                BigWebConnector(),
+                CardRushConnector(),
+                VanHappyConnector(),
+                OltaConnector(),
+                ManzokuyaConnector(),
+                ManaSourceConnector(),
+            )
+        ),
     )
     application = ApplicationBuilder().token(settings.require_bot_token()).build()
     for handler in bot.handlers():

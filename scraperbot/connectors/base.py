@@ -25,6 +25,22 @@ def print_reference(card: CardPrint) -> str:
     return f"{card.set_code}/{card.collector_number}"
 
 
+def retailer_print_reference(card: CardPrint) -> str:
+    """Return the conventional hyphenated Japanese serial used by stores.
+
+    Database keys intentionally remove punctuation so variants such as
+    ``D-PR/953`` and ``DPR953`` resolve to the same print.  Store search boxes,
+    however, commonly index the displayed Japanese form with its hyphens.
+    """
+    set_code = card.set_code
+    if set_code == "DPR":
+        displayed_set = "D-PR"
+    else:
+        matched = re.fullmatch(r"(DZ|D|V)(LBT|TTD|BT|SS|SD|TD|TB|PS|PV|VS)(\d+)", set_code)
+        displayed_set = f"{matched.group(1)}-{matched.group(2)}{matched.group(3)}" if matched else set_code
+    return f"{displayed_set}/{card.collector_number}"
+
+
 def normalise_print_reference(value: str) -> str:
     """Make retailer variants such as ``DZ-BT16/FFR02`` comparable."""
     return re.sub(r"[^A-Za-z0-9]", "", value).upper()

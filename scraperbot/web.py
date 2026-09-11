@@ -16,6 +16,9 @@ from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.config import Settings
 from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardrush import CardRushConnector
+from scraperbot.connectors.manasource import ManaSourceConnector
+from scraperbot.connectors.manzokuya import ManzokuyaConnector
+from scraperbot.connectors.olta import OltaConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
 from scraperbot.models import CardFamilyComparisonResult, CardPrint, ComparisonResult, StoreOffer, normalise_finish
@@ -273,7 +276,17 @@ def build_web_application(settings: Settings | None = None) -> LocalPriceCheckWe
     )
     return LocalPriceCheckWeb(
         catalogue,
-        ComparisonService((yuyutei, BigWebConnector(), CardRushConnector(), VanHappyConnector())),
+        ComparisonService(
+            (
+                yuyutei,
+                BigWebConnector(),
+                CardRushConnector(),
+                VanHappyConnector(),
+                OltaConnector(),
+                ManzokuyaConnector(),
+                ManaSourceConnector(),
+            )
+        ),
     )
 
 

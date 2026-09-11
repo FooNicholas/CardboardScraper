@@ -1,5 +1,13 @@
+import asyncio
+import json
+
+import httpx
+
 from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardrush import CardRushConnector
+from scraperbot.connectors.manasource import ManaSourceConnector
+from scraperbot.connectors.manzokuya import ManzokuyaConnector
+from scraperbot.connectors.olta import OltaConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
 from scraperbot.models import Availability, CardPrint
@@ -262,6 +270,130 @@ def test_vanhappy_matches_exact_prints_and_reports_stock_and_sold_out_prices() -
         (280, Availability.SOLD_OUT, 0),
     ]
     assert offers[0].listing_url == "https://www.van-happy.com/view/item/28712"
-import asyncio
 
-import httpx
+
+def test_olta_matches_exact_prints_and_keeps_sold_out_prices() -> None:
+    card = CardPrint(
+        set_code="DZ-BT09",
+        collector_number="006",
+        rarity="RRR",
+        english_name="Finile",
+        japanese_name="ダイアフルドール ふぃんりー",
+        source="test",
+    )
+    offers = OltaConnector.parse_items(
+        card,
+        [
+            {
+                "name": "ダイアフルドール ふぃんりー[RRR][DZ-BT09/006]",
+                "code": "494485",
+                "productSkus": [
+                    {
+                        "skuCode": "condition-a-494485",
+                        "price": 1290,
+                        "stock": 5,
+                        "noStockPurchasable": False,
+                        "productVariationValues": [{"variationValueName": "A+"}],
+                    },
+                    {
+                        "skuCode": "condition-b-494485",
+                        "price": 980,
+                        "stock": 0,
+                        "noStockPurchasable": False,
+                        "productVariationValues": [{"variationValueName": "A-"}],
+                    },
+                ],
+            },
+            {
+                "name": "別のカード[RRR][DZ-BT09/007]",
+                "code": "other",
+                "productSkus": [{"skuCode": "other", "price": 100, "stock": 1}],
+            },
+        ],
+    )
+    assert [(offer.price_yen, offer.availability, offer.stock_count) for offer in offers] == [
+        (1290, Availability.IN_STOCK, 5),
+        (980, Availability.SOLD_OUT, 0),
+    ]
+    assert [offer.condition for offer in offers] == ["A+", "A-"]
+    assert offers[0].listing_url == "https://olta-tcg.com/VG/product/detail/494485"
+
+
+def test_manzokuya_matches_serial_and_reports_numeric_circle_and_sold_out_stock() -> None:
+    html = """
+    <ul>
+      <li><a href="/products/detail/238590"><img alt="!★パラ★ [ FFR ] DZ-BT16/FFR14 主峰の伝説・エスタシオン“華馳弩樹”"></a>
+        <p>￥1,680 (税込)</p><p>在庫: 3</p><button>カートに入れる</button></li>
+      <li><a href="/products/detail/238591"><img alt="[FFR] DZ-BT16/FFR14 主峰の伝説・エスタシオン“華馳弩樹”"></a>
+        <p>￥1,580 (税込)</p><p>在庫: ◯</p><button>カートに入れる</button></li>
+      <li><a href="/products/detail/238592"><img alt="[FFR] DZ-BT16/FFR14 主峰の伝説・エスタシオン“華馳弩樹”"></a>
+        <p>SOLD OUT</p><p>￥1,180 (税込)</p><button disabled>ただいま品切れ中です。</button></li>
+      <li><a href="/products/detail/other"><img alt="[FFR] DZ-BT16/FFR13 別のカード"></a><p>￥100</p></li>
+    </ul>
+    """
+    card = CardPrint(
+        set_code="DZ-BT16",
+        collector_number="FFR14",
+        rarity="FFR",
+        english_name="Estacion",
+        japanese_name="主峰の伝説・エスタシオン“華馳弩樹”",
+        source="test",
+    )
+    offers = ManzokuyaConnector.parse_html(card, html)
+    assert [(offer.price_yen, offer.availability, offer.stock_count) for offer in offers] == [
+        (1680, Availability.IN_STOCK, 3),
+        (1580, Availability.IN_STOCK, None),
+        (1180, Availability.SOLD_OUT, 0),
+    ]
+    assert offers[0].listing_url == "https://shopmanzokuya.com/products/detail/238590"
+
+
+def test_mana_source_matches_serial_and_retains_a_sold_out_offer_without_price() -> None:
+    html = """
+    <ul>
+      <li><a href="/product/195805"><p>【FFR】主峰の伝説・エスタシオン “華馳弩樹” DZ-BT16/FFR14</p>
+        <p>1,680円 (税込)</p><p>在庫数 2個</p></a></li>
+      <li><a href="/product/195806"><p>【FFR】主峰の伝説・エスタシオン “華馳弩樹” DZ-BT16/FFR14</p>
+        <p>在庫なし</p></a></li>
+      <li><a href="/product/other"><p>【FFR】別のカード DZ-BT16/FFR13</p><p>100円</p></a></li>
+    </ul>
+    """
+    card = CardPrint(
+        set_code="DZ-BT16",
+        collector_number="FFR14",
+        rarity="FFR",
+        english_name="Estacion",
+        japanese_name="主峰の伝説・エスタシオン“華馳弩樹”",
+        source="test",
+    )
+    offers = ManaSourceConnector.parse_html(card, html)
+    assert [(offer.price_yen, offer.availability, offer.stock_count) for offer in offers] == [
+        (1680, Availability.IN_STOCK, 2),
+        (None, Availability.SOLD_OUT, None),
+    ]
+    assert offers[1].price_display == "Price unavailable"
+    assert offers[0].listing_url == "https://www.manasource.net/product/195805"
+
+
+def test_new_store_connectors_search_by_hyphenated_japanese_serial() -> None:
+    requests: dict[str, str | None] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests[request.url.host] = request.url.params.get("keyword") or request.url.params.get("name")
+        if request.url.host == "olta-tcg.com":
+            assert json.loads(request.content)["variables"]["where"]["name"]["contains"] == "DZ-BT16/FFR02"
+            return httpx.Response(200, json={"data": {"productFaces": {"items": []}}})
+        return httpx.Response(200, text="")
+
+    async def run() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await OltaConnector(client).search(CARD)
+            await ManzokuyaConnector(client).search(CARD)
+            await ManaSourceConnector(client).search(CARD)
+
+    asyncio.run(run())
+    assert requests == {
+        "olta-tcg.com": None,
+        "shopmanzokuya.com": "DZ-BT16/FFR02",
+        "www.manasource.net": "DZ-BT16/FFR02",
+    }
