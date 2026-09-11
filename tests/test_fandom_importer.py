@@ -57,7 +57,7 @@ def test_bulk_fandom_import_skips_region_specific_promo_lists(tmp_path: Path) ->
     assert source.requested_sets == ["DBT01"]
 
 
-def test_bulk_fandom_import_skips_v_series_products(tmp_path: Path) -> None:
+def test_bulk_fandom_import_includes_d_era_p_and_v_products(tmp_path: Path) -> None:
     database = tmp_path / "catalogue.sqlite3"
     source = FakeFandomSource()
     with CatalogueRepository(database) as catalogue:
@@ -72,5 +72,5 @@ def test_bulk_fandom_import_skips_v_series_products(tmp_path: Path) -> None:
 
     items = asyncio.run(import_all_fandom_mappings(database, source=source))  # type: ignore[arg-type]
 
-    assert [item.set_code for item in items] == ["DBT01"]
-    assert source.requested_sets == ["DBT01"]
+    assert [item.set_code for item in items] == ["DBT01", "DPS01", "DPV01", "DVS01"]
+    assert source.requested_sets == ["DBT01", "DPS01", "DPV01", "DVS01"]

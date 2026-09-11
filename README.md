@@ -126,7 +126,9 @@ scraperbot-map-fandom --set DZ-BT16
 
 To build the complete current-Standard Japanese print master, including
 Japanese editions of English releases, use the resumable D/DZ-era import. It
-deliberately excludes V-series and older formats:
+excludes base V-series and older formats, while retaining the D-era `D-PS`,
+`D-PV`, and `D-VS` product families because some of their cards remain
+current-format playable:
 
 ```bash
 scraperbot-import-japanese --all
