@@ -180,9 +180,10 @@ def test_search_is_not_blocked_by_a_slow_store_comparison(tmp_path: Path) -> Non
 def test_browser_ui_separates_print_aggregation_from_selected_print_sorting() -> None:
     assert "Aggregate card prints" in INDEX_HTML
     assert "Compare prices across " in INDEX_HTML
-    assert "Sort displayed offers" in INDEX_HTML
+    assert "Sorting displayed offers" in INDEX_HTML
     assert "Lowest price" in INDEX_HTML
     assert "Highest price" in INDEX_HTML
-    assert "☷↑" in INDEX_HTML
-    assert "☷↓" in INDEX_HTML
+    assert "☰↑" in INDEX_HTML
+    assert "☰↓" in INDEX_HTML
     assert "renderCurrentComparison" in INDEX_HTML
+    assert "Activate to sort" in INDEX_HTML
