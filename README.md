@@ -52,8 +52,13 @@ install Python packages globally.
 
 ```sh
 conda activate "/Users/foonicholas/Documents/ChatGPT/PriceCheck Scraper/ScraperBot/.conda"
+python -m pip install --no-build-isolation .
 pytest -q
 ```
+
+This installs only JP Price Checker into that Conda environment; all project
+dependencies are already isolated there. Use this normal local install rather
+than an editable install because the project path contains spaces.
 
 The full official English catalogue has already been built in the local,
 ignored `data/catalogue.sqlite3`. It is retained as reference-only data; its
