@@ -24,6 +24,25 @@ class FixedFandomSource:
         )
 
 
+class FixedJapanesePromoSource:
+    async def japanese_promo_mappings(self, set_code: str) -> tuple[str, list[EnglishNameMapping]]:
+        assert set_code == "DPR"
+        return (
+            "List of D Promo Cards",
+            [
+                EnglishNameMapping(
+                    "D-PR",
+                    "061",
+                    "PR",
+                    "Flinty Slasher",
+                    "fandom-japanese-promo",
+                    "https://cardfight.fandom.com/wiki/List_of_D_Promo_Cards",
+                    status="verified",
+                )
+            ],
+        )
+
+
 def test_special_set_repair_replaces_false_equal_serial_mapping(tmp_path: Path) -> None:
     database = tmp_path / "catalogue.sqlite3"
     with CatalogueRepository(database) as catalogue:
@@ -100,3 +119,31 @@ def test_new_official_special_set_import_is_archived_not_searchable(tmp_path: Pa
             ("DZSS10", "018"),
         ).fetchone()
         assert archived["english_name"] == "Vital Blaze Blast"
+
+
+def test_japanese_promo_section_repairs_conflicting_regional_serials(tmp_path: Path) -> None:
+    database = tmp_path / "catalogue.sqlite3"
+    with CatalogueRepository(database) as catalogue:
+        catalogue.import_japanese_many(
+            [JapaneseCardPrint("D-PR", "061", "PR", "フリンティ・スラッシャー", "https://jp/dpr061")]
+        )
+        catalogue.apply_name_mappings(
+            [
+                EnglishNameMapping(
+                    "D-PR", "061", "PR", "Unrelated English Card", "fandom",
+                    "https://cardfight.fandom.com/wiki/List_of_D_Promo_Cards",
+                )
+            ]
+        )
+
+    result = asyncio.run(
+        repair_region_specific_mappings(database, ("D-PR",), source=FixedJapanesePromoSource())
+    )
+
+    assert result.restored_fandom == 1
+    assert result.unresolved == 0
+    with CatalogueRepository(database) as catalogue:
+        card = catalogue.lookup_japanese_serial("D-PR/061")
+        assert card is not None
+        assert card.english_name == "Flinty Slasher"
+        assert not catalogue.search("unrelated english", japanese_only=True)

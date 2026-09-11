@@ -68,6 +68,25 @@ class FandomMappingSource:
             raise OfficialSourceError(f"Fandom did not provide card mappings for {wanted}.")
         return best_title, best_mappings
 
+    async def japanese_promo_mappings(self, set_code: str) -> tuple[str, list[EnglishNameMapping]]:
+        """Read only the explicitly Japanese section of Fandom's D-Promo list.
+
+        The same page also has an English D-PR list. Its serials are a
+        different regional sequence and must never be used for a Japanese
+        identity. Restricting the parse to the labelled Japanese section makes
+        each returned D-PR/CP reference direct Japanese-side evidence.
+        """
+        wanted = normalise_set_code(set_code)
+        if wanted not in self.known_list_pages:
+            raise ValueError(f"No Japanese promo list page is configured for {wanted}.")
+        title = self.known_list_pages[wanted]
+        mappings = self.parse_japanese_promo_list_mappings(
+            await self._page_html(title), wanted, source_url=self._page_url(title)
+        )
+        if not mappings:
+            raise OfficialSourceError(f"Fandom did not provide Japanese {wanted} promo mappings.")
+        return title, mappings
+
     async def cross_print_mappings_for_card(self, card: CardPrint) -> list[EnglishNameMapping]:
         """Map Japanese print references declared on one English card page.
 
@@ -182,6 +201,50 @@ class FandomMappingSource:
                     english_name=name,
                     source="fandom",
                     source_url=source_url,
+                )
+            )
+        return mappings
+
+    @classmethod
+    def parse_japanese_promo_list_mappings(
+        cls, html: str, set_code: str, *, source_url: str
+    ) -> list[EnglishNameMapping]:
+        """Parse one regional promo list without crossing into the English section."""
+        wanted = normalise_set_code(set_code)
+        soup = BeautifulSoup(html, "lxml")
+        marker = soup.find(id=lambda value: value and cls._normalise_header(value) == "japanese")
+        if marker is None:
+            return []
+        heading = marker.find_parent(re.compile(r"^h[1-6]$"))
+        if heading is None:
+            return []
+        mappings: list[EnglishNameMapping] = []
+        seen: set[str] = set()
+        for element in heading.find_all_next():
+            if element is not heading and element.name == "h2":
+                break
+            if element.name != "li" or element.find_parent("li") is not None:
+                continue
+            parsed = cls._parse_list_reference(element.get_text(" ", strip=True))
+            link = element.select_one("a[title]")
+            if not parsed or not link:
+                continue
+            row_set, collector = parsed
+            if normalise_set_code(row_set) != wanted or collector in seen:
+                continue
+            name = unescape(link.get_text(" ", strip=True))
+            if not name or name in {"?", "???"}:
+                continue
+            seen.add(collector)
+            mappings.append(
+                EnglishNameMapping(
+                    set_code=row_set,
+                    collector_number=collector,
+                    rarity=cls._rarity(collector, ""),
+                    english_name=name,
+                    source="fandom-japanese-promo",
+                    source_url=source_url,
+                    status="verified",
                 )
             )
         return mappings

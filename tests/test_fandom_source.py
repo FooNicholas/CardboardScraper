@@ -48,6 +48,25 @@ def test_parse_fandom_promo_list_to_mappings() -> None:
     ]
 
 
+def test_parse_japanese_promo_list_excludes_the_english_serial_sequence() -> None:
+    mappings = FandomMappingSource.parse_japanese_promo_list_mappings(
+        '''<h2><span id="Japanese">Japanese</span></h2><ul>
+        <li>D-PR/061 - <a title="Flinty Slasher">Flinty Slasher</a></li>
+        <li>D-PR/696 - <a title="Burrow Mushrooms">Burrow Mushrooms</a> (H)</li>
+        </ul><h2><span id="English">English</span></h2><ul>
+        <li>D-PR/061EN - <a title="Unrelated English Card">Unrelated English Card</a></li>
+        <li>D-PR/696EN - <a title="Another English Card">Another English Card</a></li>
+        </ul>''',
+        "D-PR",
+        source_url="https://cardfight.fandom.com/wiki/List_of_D_Promo_Cards",
+    )
+    assert [(mapping.collector_number, mapping.english_name) for mapping in mappings] == [
+        ("061", "Flinty Slasher"),
+        ("696", "Burrow Mushrooms"),
+    ]
+    assert all(mapping.source == "fandom-japanese-promo" and mapping.status == "verified" for mapping in mappings)
+
+
 def test_card_page_cross_print_mapping_connects_different_japanese_and_english_codes() -> None:
     card = CardPrint(
         "DZ-BT12",

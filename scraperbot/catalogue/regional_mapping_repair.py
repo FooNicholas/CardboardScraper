@@ -61,7 +61,8 @@ async def repair_region_specific_mappings(
         retained_mappings = [
             mapping
             for mapping in catalogue.direct_fandom_mappings(wanted)
-            if mapping.set_code not in PROMO_PRINT_SET_CODES or mapping.source == "fandom-cross-print"
+            if mapping.set_code not in PROMO_PRINT_SET_CODES
+            or mapping.source in {"fandom-cross-print", "fandom-japanese-promo"}
         ]
         reviewed = catalogue.reviewed_promo_mappings(wanted)
 
@@ -71,6 +72,17 @@ async def repair_region_specific_mappings(
     pages_read = 0
     for set_code in wanted:
         if set_code in PROMO_PRINT_SET_CODES:
+            try:
+                title, mappings = await source.japanese_promo_mappings(set_code)
+            except OfficialSourceError as error:
+                failures.append(set_code)
+                if progress:
+                    progress(set_code, None, 0, str(error))
+                continue
+            fetched_mappings.extend(mappings)
+            pages_read += 1
+            if progress:
+                progress(set_code, title, len(mappings), None)
             continue
         try:
             title, mappings = await source.mappings_for_set(set_code)
@@ -79,10 +91,9 @@ async def repair_region_specific_mappings(
             if progress:
                 progress(set_code, None, 0, str(error))
             continue
-        # The generic English D-Promo page shares serials with Japanese D-PR
-        # cards but does not prove those prints are the same card. Keep only
-        # explicit cross-print evidence for promo families; non-promo special
-        # set pages remain direct Fandom evidence.
+        # Non-promo special-set pages remain direct Fandom evidence. Japanese
+        # promo pages are handled separately above so this generic path never
+        # treats an English D-PR serial as Japanese evidence.
         fetched_mappings.extend(
             mapping
             for mapping in mappings

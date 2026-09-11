@@ -154,3 +154,27 @@ def test_fandom_promo_mapping_archives_a_legacy_official_record(tmp_path: Path) 
             "SELECT english_name FROM english_print_references WHERE set_code = 'DPR' AND collector_number = '953'"
         ).fetchone()
         assert archived["english_name"] == "Legacy English Name"
+
+
+def test_repair_retains_fandom_mapping_from_the_japanese_promo_section(tmp_path: Path) -> None:
+    database = tmp_path / "catalogue.sqlite3"
+    with CatalogueRepository(database) as catalogue:
+        catalogue.import_japanese_many(
+            [JapaneseCardPrint("D-PR", "061", "PR", "フリンティ・スラッシャー", "https://jp/dpr061")]
+        )
+        catalogue.apply_name_mappings(
+            [
+                EnglishNameMapping(
+                    "D-PR", "061", "PR", "Flinty Slasher", "fandom-japanese-promo",
+                    "https://cardfight.fandom.com/wiki/List_of_D_Promo_Cards", status="verified",
+                )
+            ]
+        )
+
+    result = repair_promo_mappings(database)
+
+    assert result.restored_direct_fandom == 1
+    with CatalogueRepository(database) as catalogue:
+        card = catalogue.lookup_japanese_serial("D-PR/061")
+        assert card is not None
+        assert card.english_name == "Flinty Slasher"

@@ -31,7 +31,7 @@ ENGLISH_REFERENCE_MAPPING_SOURCES = frozenset(
     {"official-english", "official-english-derived", "official-name-match"}
 )
 SAFE_JAPANESE_NAME_MAPPING_SOURCES = frozenset(
-    {"fandom", "fandom-derived", "fandom-name-match", "fandom-cross-print", "promo-review"}
+    {"fandom", "fandom-derived", "fandom-name-match", "fandom-cross-print", "fandom-japanese-promo", "promo-review"}
 )
 
 # These shared-name utility prints remain in the Japanese master while their
@@ -376,7 +376,7 @@ class CatalogueRepository:
 
     @staticmethod
     def _identity_source_rank(source: str, status: str) -> int:
-        if source in {"promo-review", "fandom-cross-print"} and status in {"reviewed", "verified"}:
+        if source in {"promo-review", "fandom-cross-print", "fandom-japanese-promo"} and status in {"reviewed", "verified"}:
             return 3
         if source == "fandom-name-match":
             return 2
@@ -698,7 +698,7 @@ class CatalogueRepository:
             FROM japanese_prints AS j
             JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
             WHERE j.set_code IN ({placeholders})
-              AND m.mapping_source IN ('fandom', 'fandom-cross-print')
+              AND m.mapping_source IN ('fandom', 'fandom-cross-print', 'fandom-japanese-promo')
             ORDER BY j.set_code, j.collector_number
             """,
             wanted,

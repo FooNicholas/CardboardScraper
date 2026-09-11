@@ -46,7 +46,7 @@ def repair_promo_mappings(
         direct_mappings = [
             mapping
             for mapping in catalogue.direct_fandom_mappings(wanted)
-            if mapping.source == "fandom-cross-print"
+            if mapping.source in {"fandom-cross-print", "fandom-japanese-promo"}
         ]
         archived, removed = catalogue.clear_promo_mappings_for_rebuild(wanted)
         restored = catalogue.apply_name_mappings(direct_mappings).mapped
