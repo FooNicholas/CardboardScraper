@@ -1,4 +1,4 @@
-"""VanHappy connector using its public Japanese-name search page."""
+"""VanHappy connector using its public name/serial search page."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class VanHappyConnector(StoreConnector):
 
     VanHappy shows each product's printed reference in square brackets, plus
     its displayed yen price and numeric stock count. The reference is the
-    match key; the Japanese name is only used to retrieve candidate listings.
+    match key; D-PR candidates are retrieved by serial, other cards by name.
     """
 
     store_id = "vanhappy"
@@ -31,9 +31,10 @@ class VanHappyConnector(StoreConnector):
         self.client = client
 
     async def search(self, card: CardPrint) -> list[StoreOffer]:
-        if not card.japanese_name:
+        keyword = f"D-PR/{card.collector_number}" if card.set_code == "DPR" else card.japanese_name
+        if not keyword:
             return []
-        response = await self._get(self.search_url, params={"search_keyword": card.japanese_name})
+        response = await self._get(self.search_url, params={"search_keyword": keyword})
         return self.parse_html(card, response.text)
 
     async def _get(self, url: str, *, params: dict[str, str]) -> httpx.Response:

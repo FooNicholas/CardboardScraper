@@ -18,6 +18,7 @@ class BigWebConnector(StoreConnector):
     cardsets_url = "https://www.bigweb.co.jp/ja/assets/data/cardsets.json"
     api_base_url = "https://api.bigweb.co.jp"
     game_id = 144
+    max_promo_pages = 3
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self.client = client
@@ -28,22 +29,35 @@ class BigWebConnector(StoreConnector):
     async def search(self, card: CardPrint) -> list[StoreOffer]:
         cardset_id = await self._cardset_id(card.set_code)
         params: dict[str, object] = {"game_id": self.game_id, "cardsets": cardset_id, "is_box": 0}
-        if card.rarity:
+        is_promo = card.set_code == "DPR"
+        if is_promo:
+            # The public frontend's `name` filter searches printed serials too.
+            # No name translation or broad D-PR/rarity scan is necessary.
+            params["name"] = f"D-PR/{card.collector_number}"
+        elif card.rarity:
             params["rarity"] = await self._rarity_id(cardset_id, card.rarity)
-        payloads = await self._product_pages(params)
+        payloads = await self._product_pages(params, max_pages=self.max_promo_pages if is_promo else None)
         if any(not payload.get("success") for payload in payloads):
             raise StoreUnavailableError("BigWeb returned an unsuccessful product response.")
         return self.parse_items(card, [item for payload in payloads for item in payload.get("items", [])])
 
-    async def _product_pages(self, params: Mapping[str, object]) -> list[Mapping[str, Any]]:
-        """Fetch all pages once when the selected card's rarity is unknown.
+    async def _product_pages(
+        self, params: Mapping[str, object], *, max_pages: int | None = None
+    ) -> list[Mapping[str, Any]]:
+        """Fetch pages for a set/rarity or a narrowly filtered promo serial.
 
         The public endpoint accepts a card set without a rarity and returns
         every variant in paginated batches. This is markedly cheaper than one
         request per rarity and keeps a name lookup responsive.
         """
         first = await self._get_json(f"{self.api_base_url}/products", params=params)
+        if not first.get("success"):
+            raise StoreUnavailableError("BigWeb returned an unsuccessful product response.")
         page_count = int((first.get("pagenate") or {}).get("pageCount") or 1)
+        if max_pages is not None and page_count > max_pages:
+            raise StoreUnavailableError(
+                "BigWeb's promo search returned too many pages; broad catalogue fetching was stopped."
+            )
         if page_count <= 1:
             return [first]
         remaining = await asyncio.gather(
@@ -105,10 +119,11 @@ class BigWebConnector(StoreConnector):
     def parse_items(cls, card: CardPrint, items: list[Mapping[str, Any]]) -> list[StoreOffer]:
         offers: list[StoreOffer] = []
         for item in items:
-            cardset = item.get("cardset") or {}
-            reference = (item.get("comment") or "").strip().split(maxsplit=1)[0]
-            if not reference:
-                reference = f"{cardset.get('slip', '')}/{(item.get('rarity') or {}).get('slip', '')}"
+            reference_parts = (item.get("comment") or "").strip().split(maxsplit=1)
+            # A set and rarity alone cannot establish a printed serial.
+            if not reference_parts:
+                continue
+            reference = reference_parts[0]
             if not references_card(card, reference):
                 continue
             raw_name = str(item.get("name", ""))

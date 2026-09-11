@@ -31,8 +31,9 @@ only after the user has chosen it.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as an English-name mapping source.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and
-  VanHappy. Card Rush and VanHappy use the retailers' Japanese card-name
-  search and only retain results with an exact printed reference.
+  VanHappy. Card Rush, VanHappy, and BigWeb search D-PR cards by their Japanese
+  serial, including unmapped promos. Other Card Rush/VanHappy cards use
+  Japanese-name search. All connectors require an exact printed reference.
 - Per-store failures are isolated: one unavailable retailer does not prevent
   the other price from being returned.
 - A local Telegram long-polling runner. Deployment/webhook hosting is
@@ -244,10 +245,24 @@ The retailer's range labels are not treated as proof that every serial in the
 range exists. Empty groups stay uncheckpointed so a later run can pick up new
 listings.
 
-For a selected Japanese D-Promo, Card Rush now searches its printed serial
+For a selected Japanese D-Promo, Card Rush and VanHappy search its printed serial
 (for example `D-PR/953`) directly, then retains only listings carrying that
 same exact reference. This works even when the promo is awaiting an English
 name review.
+
+BigWeb discovers the store's D-PR set identifier from its public catalogue,
+then uses the public product search's `name=D-PR/953` filter. Despite the
+parameter name, the store also searches printed references. Promo searches
+do not need a Japanese/English name or a separate rarity-catalogue request.
+Every returned listing must still carry the exact Japanese serial, and any
+explicitly conflicting finish is rejected. Prices remain visible for sold-out
+listings, with numeric stock retained where supplied.
+
+BigWeb promo pagination is capped at three pages. If the store reports more,
+the connector reports that it is unavailable rather than downloading the
+whole D-PR catalogue or displaying a partial price comparison. It does not
+retry with a broad name/set query. Live spot checks verify D-PR/953; this is
+connector support, not a claim that every promo is stocked by every retailer.
 
 ### Japanese serial search
 

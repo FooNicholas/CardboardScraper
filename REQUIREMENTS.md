@@ -119,7 +119,7 @@
 | Lowest-price all-printings comparison | Implemented | The browser places an immediate, far-right filter-bar action for every unambiguous card result, including a card with only one Japanese printing, so no individual print must be selected first; Telegram offers the action after its selection. Each printing is queried through the same exact-reference connectors; in-stock offers sort by price, and every row retains its print, finish, stock, and availability. Families require an exact Japanese name plus exact normalised mapped English name—never fuzzy similarity. |
 | Catalogue maintenance report | Implemented | `scraperbot-catalogue-status` is a read-only local report of Japanese search coverage, unmapped promo workload, held utility cards, Special Series coverage, and saved Yuyu-Tei D-Promo entries. It supports planning a refresh without contacting any retailer. |
 | Approved-source catalogue refresh | Implemented | `scraperbot-refresh-catalogue --apply` checks the official Japanese and English catalogues, applies official links, Fandom mappings, safe name derivation, and Yuyu-Tei D-Promo locations. It is opt-in, supports a full promo reread and regional rebuild, and never contacts protected price-store pages. |
-| Multi-store promo lookup | In progress | Yuyu-Tei uses the stored D-Promo range page and Card Rush uses the selected `D-PR/number` as its exact public search keyword; both verify the printed reference. VanHappy and BigWeb still need explicit promo catalogue locations or serial-first lookup paths. |
+| Multi-store promo lookup | Implemented | Yuyu-Tei uses the stored D-Promo range page; Card Rush and VanHappy use `D-PR/number` as their public search keyword. BigWeb discovers its D-PR set ID and applies the public `name` filter to the same serial, without a rarity lookup. Exact references and explicit finish conflicts are checked. BigWeb stops overbroad responses before pagination (maximum three pages), with no broad fallback. D-PR/953 was spot-checked live; wider retailer coverage remains to be audited. |
 | Cloudflare-protected stores | On hold | Do not bypass protection or evade detection. Add a connector only after the store supplies a permitted API, data export, partner access, or explicit allowlisting for this app. |
 | Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
 | Dorasuta | Deferred | Do not add the Dorasuta connector at this time. |
@@ -178,9 +178,13 @@ English mappings. Database counts describe print records, not distinct card name
    resolve directly; bare numbers are rejected as ambiguous. An unmapped
    Japanese print can still be selected for exact comparison without creating
    an English mapping. English serials are import/mapping data only.
-11. **In progress:** Yuyu-Tei reads the exact saved range page and Card Rush
-   searches by the Japanese promo serial. VanHappy and BigWeb still need promo
-   catalogue-location or serial-first lookup support.
+11. **Complete:** Yuyu-Tei reads the exact saved range page; Card Rush and
+   VanHappy search by Japanese promo serial. BigWeb discovers its D-PR set and
+   uses the public product `name` filter for the serial, preserving that filter
+   across at most three result pages. An overbroad/failed response never triggers
+   a full promo-catalogue fallback. Offline tests cover unmapped promos, serial
+   boundaries, finish conflicts, stock/OOS prices, and bounded pagination.
+   Live D-PR/953 spot checks verified both new paths on 2026-09-11.
 12. Backfill promo ranges incrementally, verify exact-print offers and stock
    indicators against live listings, then mark each range complete in the
    import checkpoint.
