@@ -7,7 +7,7 @@ from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.connectors.base import StoreConnector
 from scraperbot.models import Availability, CardPrint, Finish, MatchConfidence, StoreOffer
 from scraperbot.services.comparison import ComparisonService
-from scraperbot.web import LocalPriceCheckWeb
+from scraperbot.web import INDEX_HTML, LocalPriceCheckWeb
 
 
 class FixedConnector(StoreConnector):
@@ -175,3 +175,11 @@ def test_search_is_not_blocked_by_a_slow_store_comparison(tmp_path: Path) -> Non
             assert not comparison_thread.is_alive()
         finally:
             comparison_thread.join(timeout=2)
+
+
+def test_browser_ui_separates_print_aggregation_from_selected_print_sorting() -> None:
+    assert "Aggregate card prints" in INDEX_HTML
+    assert "Compare prices across " in INDEX_HTML
+    assert "Sort this printing's offers" in INDEX_HTML
+    assert "Lowest price" in INDEX_HTML
+    assert "Highest price" in INDEX_HTML
