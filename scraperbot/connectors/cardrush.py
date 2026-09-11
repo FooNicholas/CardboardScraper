@@ -1,4 +1,4 @@
-"""Card Rush Vanguard connector using its Japanese-name product search."""
+"""Card Rush Vanguard connector using exact serials for Japanese promos."""
 
 from __future__ import annotations
 
@@ -18,13 +18,18 @@ class CardRushConnector(StoreConnector):
     Product names embed the printed reference in braces, for example
     ``{DZ-BT14/001}``. That reference—not the Japanese name—is used as the
     match key, so parallel rarities and similarly named cards stay separate.
+    Japanese D-Promos use their printed ``D-PR/number`` as the Card Rush
+    search keyword. This keeps promo lookup independent of an English mapping
+    and avoids a broad shared-name search.
     """
 
     store_id = "cardrush"
     store_name = "Card Rush"
     base_url = "https://www.cardrush-vanguard.jp"
     search_url = f"{base_url}/product-list"
-    _reference_pattern = re.compile(r"\{([A-Za-z0-9-]+/[A-Za-z0-9-]+)\}")
+    # Search-result highlighting can wrap the serial in nested tags. The
+    # text extractor then yields ``{ D-PR/953 }`` instead of ``{D-PR/953}``.
+    _reference_pattern = re.compile(r"\{\s*([A-Za-z0-9-]+/[A-Za-z0-9-]+)\s*\}")
     _price_pattern = re.compile(r"(?<!\d)([0-9][0-9,]*)\s*円")
     _stock_pattern = re.compile(r"在庫数\s*(\d+)\s*[個枚]")
     _condition_pattern = re.compile(r"〔状態\s*([^〕]+)〕")
@@ -33,10 +38,17 @@ class CardRushConnector(StoreConnector):
         self.client = client
 
     async def search(self, card: CardPrint) -> list[StoreOffer]:
-        if not card.japanese_name:
+        keyword = self._search_keyword(card)
+        if not keyword:
             return []
-        response = await self._get(self.search_url, params={"keyword": card.japanese_name, "Submit": "検索"})
+        response = await self._get(self.search_url, params={"keyword": keyword, "Submit": "検索"})
         return self.parse_html(card, response.text)
+
+    @staticmethod
+    def _search_keyword(card: CardPrint) -> str | None:
+        if card.set_code == "DPR":
+            return f"D-PR/{card.collector_number}"
+        return card.japanese_name
 
     async def _get(self, url: str, *, params: dict[str, str]) -> httpx.Response:
         headers = {"User-Agent": "JP-Price-Checker/0.1 (+approved personal price comparison)"}

@@ -197,6 +197,39 @@ def test_cardrush_matches_exact_prints_and_retains_condition_stock_and_oos_price
     assert offers[0].listing_url == "https://www.cardrush-vanguard.jp/product/53085"
 
 
+def test_cardrush_uses_the_japanese_promo_serial_as_its_search_keyword() -> None:
+    card = CardPrint(
+        set_code="D-PR",
+        collector_number="953",
+        rarity="PR",
+        english_name="Leuhan",
+        japanese_name="大地を駆ける守主 ルアン",
+        source="test",
+    )
+    keywords: list[str | None] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        keywords.append(request.url.params.get("keyword"))
+        return httpx.Response(
+            200,
+            text="""
+            <li><a href="/product/37230"><p>大地を駆ける守主ルアン【PR】{
+            <span class="result-emphasis"><b>D-PR/953</b></span>}</p>
+            <p>280円（税込）</p><p>×</p></a></li>
+            """,
+        )
+
+    async def run() -> list[object]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await CardRushConnector(client).search(card)
+
+    offers = asyncio.run(run())
+    assert keywords == ["D-PR/953"]
+    assert len(offers) == 1
+    assert offers[0].availability == Availability.SOLD_OUT
+    assert offers[0].price_yen == 280
+
+
 def test_vanhappy_matches_exact_prints_and_reports_stock_and_sold_out_prices() -> None:
     html = """
     <div class="product-card">

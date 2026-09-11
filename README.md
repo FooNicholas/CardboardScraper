@@ -214,6 +214,11 @@ The retailer's range labels are not treated as proof that every serial in the
 range exists. Empty groups stay uncheckpointed so a later run can pick up new
 listings.
 
+For a selected Japanese D-Promo, Card Rush now searches its printed serial
+(for example `D-PR/953`) directly, then retains only listings carrying that
+same exact reference. This works even when the promo is awaiting an English
+name review.
+
 ### Japanese serial search
 
 The browser and Telegram bot also accept an exact Japanese print serial:
