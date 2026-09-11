@@ -27,6 +27,12 @@ from scraperbot.models import (
 
 PROMO_PRINT_SET_CODES = frozenset({"DPR", "CP"})
 SPECIAL_SET_CODE_PATTERN = re.compile(r"^(?:D|DZ)SS\d+$")
+ENGLISH_REFERENCE_MAPPING_SOURCES = frozenset(
+    {"official-english", "official-english-derived", "official-name-match"}
+)
+SAFE_JAPANESE_NAME_MAPPING_SOURCES = frozenset(
+    {"fandom", "fandom-derived", "fandom-name-match", "fandom-cross-print", "promo-review"}
+)
 
 # These shared-name utility prints remain in the Japanese master while their
 # user-facing search and selection workflow is on hold. Do not add a generic
@@ -109,6 +115,41 @@ CREATE TABLE IF NOT EXISTS japanese_prints (
 
 CREATE INDEX IF NOT EXISTS idx_japanese_prints_set ON japanese_prints(set_code);
 
+-- A card identity is deliberately separate from a physical printing.  The
+-- Japanese name is the canonical local identity; English names and aliases
+-- are search affordances attached to that identity, never alternate prints.
+CREATE TABLE IF NOT EXISTS card_identities (
+    id INTEGER PRIMARY KEY,
+    japanese_name TEXT NOT NULL UNIQUE,
+    english_name TEXT NOT NULL,
+    aliases_json TEXT NOT NULL DEFAULT '[]',
+    normalised_name TEXT NOT NULL,
+    normalised_aliases TEXT NOT NULL DEFAULT '',
+    mapping_source TEXT NOT NULL,
+    mapping_source_url TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'provisional',
+    imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_card_identities_name ON card_identities(normalised_name);
+
+CREATE TABLE IF NOT EXISTS japanese_print_identity_links (
+    japanese_print_id INTEGER PRIMARY KEY REFERENCES japanese_prints(id) ON DELETE CASCADE,
+    card_identity_id INTEGER NOT NULL REFERENCES card_identities(id) ON DELETE CASCADE,
+    linked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_japanese_print_identity_card
+ON japanese_print_identity_links(card_identity_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS card_identity_search USING fts5(
+    identity_id UNINDEXED,
+    english_name,
+    japanese_name,
+    aliases,
+    tokenize = 'unicode61 remove_diacritics 2'
+);
+
 CREATE TABLE IF NOT EXISTS official_promo_identities (
     collector_number TEXT PRIMARY KEY,
     japanese_name TEXT NOT NULL,
@@ -166,6 +207,26 @@ CREATE VIRTUAL TABLE IF NOT EXISTS card_search USING fts5(
     aliases,
     tokenize = 'unicode61 remove_diacritics 2'
 );
+
+-- Legacy equality claims made from matching Japanese/English printed numbers.
+-- These records are retained for a future, explicitly reviewed cross-region
+-- feature, but are never read by Japanese-card search or identity code.
+CREATE TABLE IF NOT EXISTS archived_english_reference_mappings (
+    id INTEGER PRIMARY KEY,
+    japanese_print_id INTEGER NOT NULL REFERENCES japanese_prints(id) ON DELETE CASCADE,
+    english_name TEXT NOT NULL,
+    aliases_json TEXT NOT NULL DEFAULT '[]',
+    mapping_source TEXT NOT NULL,
+    mapping_source_url TEXT NOT NULL,
+    status TEXT NOT NULL,
+    archived_reason TEXT NOT NULL,
+    imported_at TEXT NOT NULL,
+    archived_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(japanese_print_id, english_name, mapping_source, mapping_source_url)
+);
+
+CREATE INDEX IF NOT EXISTS idx_archived_english_reference_mappings_japanese
+ON archived_english_reference_mappings(japanese_print_id);
 """
 
 
@@ -207,6 +268,103 @@ class CatalogueRepository:
         self._add_column_if_missing("card_prints", "finish_raw", "TEXT")
         self._add_column_if_missing("japanese_prints", "finish", "TEXT NOT NULL DEFAULT 'unknown'")
         self._add_column_if_missing("japanese_prints", "finish_raw", "TEXT")
+        # D-PR is the printed promo rarity. The official PR identity table
+        # intentionally omits a rarity column, so retain this stable printed
+        # fact in the Japanese master for user rarity filters.
+        self.connection.execute(
+            "UPDATE japanese_prints SET rarity='PR' WHERE set_code='DPR' AND rarity=''"
+        )
+        self._migrate_card_identities()
+
+    def _migrate_card_identities(self) -> None:
+        """Build shared identities from previously accepted one-print mappings.
+
+        This is a one-way compatibility migration: legacy per-print mappings
+        stay as provenance, while the new link table becomes the source of
+        user-facing Japanese search coverage.  A conflicted Japanese name is
+        intentionally not migrated until a review resolves it.
+        """
+        existing = self.connection.execute("SELECT COUNT(*) FROM card_identities").fetchone()[0]
+        if existing:
+            return
+        rows = self.connection.execute(
+            """
+            SELECT j.set_code, j.collector_number, j.japanese_name, m.english_name, m.aliases_json,
+                   m.mapping_source, m.mapping_source_url, m.status, m.imported_at
+            FROM japanese_prints AS j
+            JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+            WHERE j.japanese_name NOT IN (?, ?, ?, ?)
+            ORDER BY j.japanese_name, m.imported_at DESC
+            """,
+            tuple(HELD_UTILITY_PROMO_NAMES),
+        ).fetchall()
+        candidates: dict[str, dict[str, sqlite3.Row]] = {}
+        for row in rows:
+            if row['mapping_source'] not in SAFE_JAPANESE_NAME_MAPPING_SOURCES:
+                continue
+            candidates.setdefault(str(row['japanese_name']), {}).setdefault(str(row['english_name']), row)
+        for japanese_name, names in candidates.items():
+            if len(names) != 1:
+                continue
+            row = next(iter(names.values()))
+            identity_id = self._upsert_card_identity(
+                japanese_name,
+                str(row['english_name']),
+                tuple(json.loads(row['aliases_json'])),
+                str(row['mapping_source']),
+                str(row['mapping_source_url']),
+                str(row['status']),
+            )
+            self._link_identity_to_matching_prints(identity_id, japanese_name)
+
+    def rebuild_card_identities(self) -> tuple[int, int]:
+        """Recreate shared search identities from current safe mapping evidence."""
+        self.connection.execute("DELETE FROM card_identity_search")
+        self.connection.execute("DELETE FROM japanese_print_identity_links")
+        self.connection.execute("DELETE FROM card_identities")
+        self._migrate_card_identities()
+        identities = int(self.connection.execute("SELECT COUNT(*) FROM card_identities").fetchone()[0])
+        links = int(self.connection.execute("SELECT COUNT(*) FROM japanese_print_identity_links").fetchone()[0])
+        return identities, links
+
+    def archive_english_reference_number_mappings(self) -> tuple[int, int]:
+        """Archive every JP mapping inferred from an English printed reference.
+
+        English print serials are retained in ``english_print_references`` and
+        ``card_prints`` for research only. They may never decide the identity
+        of a Japanese printing: regional release ordering can differ for any
+        product family, not just promo or ``Re`` rows.
+        """
+        sources = tuple(sorted(ENGLISH_REFERENCE_MAPPING_SOURCES))
+        placeholders = ', '.join('?' for _ in sources)
+        try:
+            self.connection.execute(
+                f"""
+                INSERT OR IGNORE INTO archived_english_reference_mappings (
+                    japanese_print_id, english_name, aliases_json, mapping_source,
+                    mapping_source_url, status, archived_reason, imported_at
+                )
+                SELECT japanese_print_id, english_name, aliases_json, mapping_source,
+                       mapping_source_url, status, 'english_serial_not_identity', imported_at
+                FROM english_name_mappings
+                WHERE mapping_source IN ({placeholders})
+                """,
+                sources,
+            )
+            removed = self.connection.execute(
+                f"DELETE FROM english_name_mappings WHERE mapping_source IN ({placeholders})", sources
+            ).rowcount
+            identities, links = self.rebuild_card_identities()
+        except Exception:
+            self.connection.rollback()
+            raise
+        self.connection.commit()
+        return removed, links
+
+    # Compatibility spelling for an unshipped migration command. It archives
+    # mapping claims; English printed serials themselves are retained.
+    def remove_english_reference_number_mappings(self) -> tuple[int, int]:
+        return self.archive_english_reference_number_mappings()
 
     def _add_column_if_missing(self, table: str, column: str, definition: str) -> None:
         columns = {
@@ -215,6 +373,117 @@ class CatalogueRepository:
         }
         if column not in columns:
             self.connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    @staticmethod
+    def _identity_source_rank(source: str, status: str) -> int:
+        if source in {"promo-review", "fandom-cross-print"} and status in {"reviewed", "verified"}:
+            return 3
+        if source == "fandom-name-match":
+            return 2
+        return 1
+
+    def _upsert_card_identity(
+        self,
+        japanese_name: str,
+        english_name: str,
+        aliases: tuple[str, ...],
+        source: str,
+        source_url: str,
+        status: str,
+    ) -> int:
+        """Create or safely improve a shared English-search identity."""
+        existing = self.connection.execute(
+            "SELECT * FROM card_identities WHERE japanese_name = ?", (japanese_name,)
+        ).fetchone()
+        if existing:
+            current_rank = self._identity_source_rank(existing['mapping_source'], existing['status'])
+            incoming_rank = self._identity_source_rank(source, status)
+            if existing['english_name'] != english_name:
+                # Different English names for one canonical Japanese name are
+                # evidence of an unresolved mapping conflict.  Do not let
+                # arrival order decide which name users can search. A direct
+                # reviewed/verified correction is the sole way to resolve it.
+                if incoming_rank < 3:
+                    self.connection.execute(
+                        "UPDATE card_identities SET status='conflicted', imported_at=CURRENT_TIMESTAMP WHERE id=?",
+                        (existing['id'],),
+                    )
+                    self.connection.execute(
+                        "DELETE FROM japanese_print_identity_links WHERE card_identity_id=?", (existing['id'],)
+                    )
+                    self._refresh_identity_search_row(int(existing['id']))
+                    return int(existing['id'])
+            if existing['english_name'] == english_name and incoming_rank <= current_rank:
+                aliases = tuple(dict.fromkeys((*json.loads(existing['aliases_json']), *aliases)))
+                source, source_url, status = (
+                    existing['mapping_source'], existing['mapping_source_url'], existing['status']
+                )
+            self.connection.execute(
+                """
+                UPDATE card_identities
+                SET english_name=?, aliases_json=?, normalised_name=?, normalised_aliases=?,
+                    mapping_source=?, mapping_source_url=?, status=?, imported_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (
+                    english_name, json.dumps(aliases, ensure_ascii=False), normalise_text(english_name),
+                    " ".join(normalise_text(alias) for alias in aliases), source, source_url, status, existing['id'],
+                ),
+            )
+            identity_id = int(existing['id'])
+        else:
+            cursor = self.connection.execute(
+                """
+                INSERT INTO card_identities (
+                    japanese_name, english_name, aliases_json, normalised_name, normalised_aliases,
+                    mapping_source, mapping_source_url, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    japanese_name, english_name, json.dumps(aliases, ensure_ascii=False),
+                    normalise_text(english_name), " ".join(normalise_text(alias) for alias in aliases),
+                    source, source_url, status,
+                ),
+            )
+            identity_id = int(cursor.lastrowid)
+        self._refresh_identity_search_row(identity_id)
+        return identity_id
+
+    def _link_identity_to_matching_prints(self, identity_id: int, japanese_name: str) -> int:
+        """Attach every physical Japanese printing of one canonical card."""
+        cursor = self.connection.execute(
+            """
+            INSERT INTO japanese_print_identity_links (japanese_print_id, card_identity_id)
+            SELECT id, ? FROM japanese_prints
+            WHERE japanese_name = ? AND japanese_name NOT IN (?, ?, ?, ?)
+            ON CONFLICT(japanese_print_id) DO UPDATE SET
+                card_identity_id=excluded.card_identity_id, linked_at=CURRENT_TIMESTAMP
+            """,
+            (identity_id, japanese_name, *HELD_UTILITY_PROMO_NAMES),
+        )
+        return cursor.rowcount
+
+    def _assign_card_identity(self, mapping: EnglishNameMapping, japanese: sqlite3.Row) -> int | None:
+        if japanese['japanese_name'] in HELD_UTILITY_PROMO_NAMES:
+            return None
+        identity_id = self._upsert_card_identity(
+            str(japanese['japanese_name']), mapping.english_name, mapping.aliases,
+            mapping.source, mapping.source_url, mapping.status,
+        )
+        identity = self.connection.execute("SELECT status FROM card_identities WHERE id=?", (identity_id,)).fetchone()
+        if identity and identity['status'] == 'conflicted':
+            return identity_id
+        self._link_identity_to_matching_prints(identity_id, str(japanese['japanese_name']))
+        return identity_id
+
+    def _refresh_identity_search_row(self, identity_id: int) -> None:
+        row = self.connection.execute("SELECT * FROM card_identities WHERE id=?", (identity_id,)).fetchone()
+        assert row is not None
+        self.connection.execute("DELETE FROM card_identity_search WHERE identity_id = ?", (str(identity_id),))
+        self.connection.execute(
+            "INSERT INTO card_identity_search(identity_id, english_name, japanese_name, aliases) VALUES (?, ?, ?, ?)",
+            (str(identity_id), row['english_name'], row['japanese_name'], " ".join(json.loads(row['aliases_json']))),
+        )
 
     def __enter__(self) -> "CatalogueRepository":
         return self
@@ -266,71 +535,35 @@ class CatalogueRepository:
     ) -> MappingImportResult:
         """Layer community English names over the Japanese print master.
 
-        A matching official-English card is never overwritten. Its publication
-        remains the authoritative replacement for a provisional mapping.
+        An English name can be attached only through a Japanese catalogue
+        record and its exact canonical Japanese name. English print numbers
+        are retained elsewhere as reference data, never as identity evidence.
         """
         mapped = derived = unmatched = preserved_official = 0
         mappings_by_japanese_name: dict[tuple[str, str], EnglishNameMapping] = {}
         try:
             for mapping in mappings:
+                # Official English catalogue numbers are never Japanese
+                # identity evidence. Their records remain available to an
+                # explicit cross-print/Fandom importer, but are not applied.
+                if mapping.source in ENGLISH_REFERENCE_MAPPING_SOURCES:
+                    unmatched += 1
+                    continue
                 japanese = self._japanese_by_reference(mapping.set_code, mapping.collector_number)
                 if not japanese:
                     unmatched += 1
                     continue
-                # Japanese and English promos and Special Series products use
-                # independent regional sequences. Never let an equal
-                # reference turn into a false official match (for example JP
-                # D-PR/953 and EN D-PR/953EN, or JP DZ-SS10/018 and EN
-                # DZ-SS10/018EN, name different cards).
-                is_region_specific = is_region_specific_print_set(japanese["set_code"])
                 if (
                     japanese["set_code"] in PROMO_PRINT_SET_CODES
                     and japanese["japanese_name"] in HELD_UTILITY_PROMO_NAMES
                 ):
                     continue
-                if is_region_specific:
-                    # An upgrade may encounter legacy official promo records
-                    # before the explicit repair command runs. Preserve them
-                    # as English-only evidence before this Japanese mapping
-                    # replaces the shared catalogue key.
-                    for legacy_row in self._official_english_by_reference(
-                        mapping.set_code, mapping.collector_number
-                    ):
-                        self._archive_english_print_reference(legacy_row)
-                    official_rows = []
-                else:
-                    official_rows = self._official_english_by_reference(
-                        mapping.set_code, mapping.collector_number
-                    )
-                existing_mapping = self.connection.execute(
-                    "SELECT mapping_source FROM english_name_mappings WHERE japanese_print_id = ?",
-                    (japanese["id"],),
-                ).fetchone()
-                if (
-                    not is_region_specific
-                    and existing_mapping
-                    and existing_mapping["mapping_source"] == "official-english"
-                    and (
-                    mapping.source != "official-english"
-                    )
-                ):
-                    preserved_official += 1
-                    continue
-                # An exact official-English print is a stronger source than a
-                # community page, even when the caller has not synced the
-                # official links beforehand.
-                if official_rows and mapping.source != "official-english":
-                    official = official_rows[0]
-                    mapping = EnglishNameMapping(
-                        set_code=official["set_code"],
-                        collector_number=official["collector_number"],
-                        rarity=official["rarity"] or japanese["rarity"],
-                        english_name=official["english_name"],
-                        aliases=tuple(json.loads(official["aliases_json"])),
-                        source="official-english",
-                        source_url=official["source_url"] or "https://en.cf-vanguard.com/cardlist/",
-                        status="official",
-                    )
+                # Archive any legacy equal-reference claim before the trusted
+                # Japanese-name mapping is written. This is preservation, not
+                # a match: no English serial is read to determine equality.
+                self._archive_legacy_english_records_for_reference(
+                    mapping.set_code, mapping.collector_number
+                )
                 rarity = mapping.rarity or japanese["rarity"]
                 if mapping.rarity and mapping.rarity != japanese["rarity"]:
                     self.connection.execute(
@@ -365,10 +598,11 @@ class CatalogueRepository:
                         mapping.status,
                     ),
                 )
-                if official_rows:
-                    self._link_japanese_print_to_official_cards(official_rows, japanese)
-                    preserved_official += 1
-                    continue
+                # This is the user-facing association: one English search
+                # identity reaches every Japanese printing with this canonical
+                # Japanese name, regardless of whether it is a main set, PR,
+                # or Special Series printing.
+                self._assign_card_identity(mapping, japanese)
                 self._upsert(
                     CardPrint(
                         set_code=mapping.set_code,
@@ -416,13 +650,6 @@ class CatalogueRepository:
                             source_mapping.status,
                         ),
                     )
-                    official_rows = self._official_english_by_reference(
-                        set_code, japanese["collector_number"]
-                    )
-                    if official_rows:
-                        self._link_japanese_print_to_official_cards(official_rows, japanese)
-                        preserved_official += 1
-                        continue
                     self._upsert(
                         CardPrint(
                             set_code=set_code,
@@ -446,37 +673,13 @@ class CatalogueRepository:
         return MappingImportResult(mapped, derived, unmatched, preserved_official)
 
     def official_english_name_mappings(self) -> list[EnglishNameMapping]:
-        """Return exact Japanese/official-English matches for a local sync.
+        """Return no mappings: English serials cannot establish JP identity.
 
-        Matching is by printed set code and collector number, never merely by
-        card name. This retains distinct Japanese and English printings while
-        making an official English name searchable for the Japanese print.
+        The official English import remains stored as reference data for a
+        future reviewed cross-region feature, but its set/serial values are
+        intentionally never converted into Japanese-name mappings.
         """
-        rows = self.connection.execute(
-            """
-            SELECT j.set_code, j.collector_number, j.rarity AS japanese_rarity,
-                   c.rarity, c.english_name, c.aliases_json, c.source_url
-            FROM japanese_prints AS j
-            JOIN card_prints AS c
-              ON c.set_code = j.set_code AND c.collector_number = j.collector_number
-            WHERE c.source = 'official-english'
-            ORDER BY j.set_code, j.collector_number, c.rarity
-            """
-        ).fetchall()
-        return [
-            EnglishNameMapping(
-                set_code=row["set_code"],
-                collector_number=row["collector_number"],
-                rarity=row["rarity"] or row["japanese_rarity"],
-                english_name=row["english_name"],
-                aliases=tuple(json.loads(row["aliases_json"])),
-                source="official-english",
-                source_url=row["source_url"] or "https://en.cf-vanguard.com/cardlist/",
-                status="official",
-            )
-            for row in rows
-            if not is_region_specific_print_set(row["set_code"])
-        ]
+        return []
 
     def direct_fandom_mappings(self, set_codes: Iterable[str]) -> list[EnglishNameMapping]:
         """Return direct Fandom evidence already attached to selected prints.
@@ -568,11 +771,21 @@ class CatalogueRepository:
                 """,
                 wanted,
             )
+            self.connection.execute(
+                f"""
+                DELETE FROM japanese_print_identity_links
+                WHERE japanese_print_id IN (
+                    SELECT id FROM japanese_prints WHERE set_code IN ({placeholders})
+                )
+                """,
+                wanted,
+            )
             if card_ids:
                 self.connection.executemany(
                     "DELETE FROM card_search WHERE print_id = ?", ((str(card_id),) for card_id in card_ids)
                 )
             self.connection.execute(f"DELETE FROM card_prints WHERE set_code IN ({placeholders})", wanted)
+            self._prune_orphan_card_identities()
         except Exception:
             self.connection.rollback()
             raise
@@ -595,8 +808,8 @@ class CatalogueRepository:
         rows = self.connection.execute(
             f"""
             SELECT j.* FROM japanese_prints AS j
-            LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
-            WHERE j.set_code IN ({placeholders}) AND m.japanese_print_id IS NULL
+            LEFT JOIN japanese_print_identity_links AS l ON l.japanese_print_id = j.id
+            WHERE j.set_code IN ({placeholders}) AND l.japanese_print_id IS NULL
             ORDER BY j.set_code, j.collector_number
             """,
             wanted,
@@ -756,16 +969,16 @@ class CatalogueRepository:
             SELECT p.* FROM promo_catalogue_entries AS p
             JOIN japanese_prints AS j
               ON j.set_code = p.set_code AND j.collector_number = p.collector_number
-            LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+            LEFT JOIN japanese_print_identity_links AS l ON l.japanese_print_id = j.id
             WHERE p.store_id = 'yuyutei' AND p.set_code = 'DPR'
-              AND m.japanese_print_id IS NULL
+              AND l.japanese_print_id IS NULL
             ORDER BY CAST(p.collector_number AS INTEGER), p.collector_number
             """
         ).fetchall()
         return [self._to_promo_entry(row) for row in rows]
 
     def eligible_name_mapping_evidence(self) -> list[sqlite3.Row]:
-        """Share the regional-safe exact-name evidence used by repair and review."""
+        """Share exact-Japanese-name Fandom evidence used by repair and review."""
         rows = self.connection.execute(
             """
             SELECT j.set_code, j.collector_number, j.japanese_name, m.english_name,
@@ -773,21 +986,17 @@ class CatalogueRepository:
             FROM japanese_prints AS j
             JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
             WHERE j.set_code NOT IN ('DPR', 'CP')
-              AND m.mapping_source IN ('fandom', 'fandom-cross-print', 'official-english')
-            ORDER BY CASE WHEN m.mapping_source='official-english' THEN 0 ELSE 1 END,
-                     m.imported_at DESC, j.set_code, j.collector_number
+              AND m.mapping_source IN ('fandom', 'fandom-cross-print')
+            ORDER BY m.imported_at DESC, j.set_code, j.collector_number
             """
         ).fetchall()
-        return [row for row in rows if not (
-            row['mapping_source'] == 'official-english' and is_region_specific_print_set(row['set_code'])
-        )]
+        return list(rows)
 
     def unambiguous_fandom_name_mappings(self, set_codes: Iterable[str]) -> list[EnglishNameMapping]:
-        """Map prints from one exact Japanese-name official/Fandom candidate.
+        """Map prints from one exact Japanese-name Fandom candidate.
 
         The historical method name is retained for the repair commands. Direct
-        official English evidence is eligible for shared-number release sets;
-        Special Series must use regional-safe Fandom evidence instead.
+        English printed references are never Japanese identity evidence.
         """
         wanted = self._normalised_set_codes(set_codes)
         if not wanted:
@@ -820,7 +1029,7 @@ class CatalogueRepository:
                     rarity=target["rarity"],
                     english_name=source["english_name"],
                     aliases=tuple(json.loads(source["aliases_json"])),
-                    source="official-name-match" if source['mapping_source'] == 'official-english' else "fandom-name-match",
+                    source="fandom-name-match",
                     source_url=source["mapping_source_url"],
                     status="provisional",
                 )
@@ -852,9 +1061,9 @@ class CatalogueRepository:
     def derive_name_mappings_from_known_japanese_names(self) -> MappingImportResult:
         """Map reprints when their Japanese name has one trusted English name.
 
-        This never translates text. A candidate is accepted only when every
-        existing mapping for the exact Japanese name agrees on one English
-        name; official-English provenance wins when it is available.
+        This never translates text or uses English printing numbers. A
+        candidate is accepted only when exact-Japanese-name Fandom evidence
+        agrees on one English name.
         """
         rows = self.connection.execute(
             """
@@ -862,6 +1071,7 @@ class CatalogueRepository:
                 SELECT j.japanese_name
                 FROM japanese_prints AS j
                 JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+                WHERE m.mapping_source IN ('fandom', 'fandom-cross-print')
                 GROUP BY j.japanese_name
                 HAVING COUNT(DISTINCT m.english_name) = 1
             ), ranked_sources AS (
@@ -869,12 +1079,12 @@ class CatalogueRepository:
                        m.mapping_source_url,
                        ROW_NUMBER() OVER (
                            PARTITION BY j.japanese_name
-                           ORDER BY CASE WHEN m.mapping_source = 'official-english' THEN 0 ELSE 1 END,
-                                    m.imported_at DESC
+                           ORDER BY m.imported_at DESC
                        ) AS source_rank
                 FROM japanese_prints AS j
                 JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
                 JOIN known_names AS known ON known.japanese_name = j.japanese_name
+                WHERE m.mapping_source IN ('fandom', 'fandom-cross-print')
             )
             SELECT j.set_code, j.collector_number, j.rarity, source.english_name,
                    source.mapping_source, source.mapping_source_url
@@ -893,7 +1103,7 @@ class CatalogueRepository:
                 collector_number=row["collector_number"],
                 rarity=row["rarity"],
                 english_name=row["english_name"],
-                source="official-english" if row["mapping_source"] == "official-english" else "fandom",
+                source="fandom-cross-print" if row["mapping_source"] == "fandom-cross-print" else "fandom",
                 source_url=row["mapping_source_url"],
                 status="derived",
             )
@@ -990,6 +1200,25 @@ class CatalogueRepository:
         """
         if not card.japanese_name:
             return [card]
+        japanese_id: int | None = -card.id if card.id is not None and card.id < 0 else None
+        if japanese_id is None:
+            japanese = self._japanese_by_reference(card.set_code, card.collector_number)
+            japanese_id = int(japanese['id']) if japanese else None
+        if japanese_id is not None:
+            identity = self.connection.execute(
+                "SELECT card_identity_id FROM japanese_print_identity_links WHERE japanese_print_id=?",
+                (japanese_id,),
+            ).fetchone()
+            if identity:
+                rows = self.connection.execute(
+                    self._identity_select()
+                    + " WHERE i.id=? ORDER BY j.set_code, j.collector_number, j.rarity, j.finish, j.id",
+                    (identity['card_identity_id'],),
+                ).fetchall()
+                if rows:
+                    return [self._to_card(row) for row in rows]
+        # Compatibility for direct `CardPrint` imports that do not have a
+        # Japanese master record yet.
         rows = self.connection.execute(
             """
             SELECT * FROM card_prints
@@ -1040,7 +1269,7 @@ class CatalogueRepository:
         return self._serial_selection_from_japanese(matches[0])
 
     def unmapped_japanese_count(self, set_code: str | None = None) -> int:
-        conditions = ["m.japanese_print_id IS NULL"]
+        conditions = ["l.japanese_print_id IS NULL"]
         values: list[object] = []
         if set_code:
             conditions.append("j.set_code = ?")
@@ -1049,7 +1278,7 @@ class CatalogueRepository:
             self.connection.execute(
                 f"""
                 SELECT COUNT(*) FROM japanese_prints AS j
-                LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+                LEFT JOIN japanese_print_identity_links AS l ON l.japanese_print_id = j.id
                 WHERE {' AND '.join(conditions)}
                 """,
                 values,
@@ -1064,8 +1293,8 @@ class CatalogueRepository:
                 """
                 SELECT DISTINCT j.set_code
                 FROM japanese_prints AS j
-                LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
-                WHERE m.japanese_print_id IS NULL
+                LEFT JOIN japanese_print_identity_links AS l ON l.japanese_print_id = j.id
+                WHERE l.japanese_print_id IS NULL
                 ORDER BY j.set_code
                 """
             )
@@ -1158,17 +1387,99 @@ class CatalogueRepository:
         rarity_values = self._normalise_rarities(rarity, rarities)
         finish_values = self._normalise_finishes(finishes)
 
-        rows = self._fts_rows(normalised_query, rarity_values, finish_values, japanese_only)
-        if not rows:
-            rows = self._substring_rows(normalised_query, rarity_values, finish_values, japanese_only)
-        if not rows:
-            rows = self._all_rows(rarity_values, finish_values, japanese_only)
+        if japanese_only:
+            # User searches are identity-first: match the English name once,
+            # then return every linked Japanese physical printing.  The old
+            # per-print search cache remains only for English-reference and
+            # backwards-compatible import workflows.
+            rows = self._identity_fts_rows(normalised_query, rarity_values, finish_values)
+            if not rows:
+                rows = self._identity_substring_rows(normalised_query, rarity_values, finish_values)
+            if not rows:
+                rows = self._identity_all_rows(rarity_values, finish_values)
+            if not rows and not self._has_card_identities():
+                rows = self._fts_rows(normalised_query, rarity_values, finish_values, japanese_only=True)
+                if not rows:
+                    rows = self._substring_rows(normalised_query, rarity_values, finish_values, japanese_only=True)
+                if not rows:
+                    rows = self._all_rows(rarity_values, finish_values, japanese_only=True)
+        else:
+            rows = self._fts_rows(normalised_query, rarity_values, finish_values, japanese_only=False)
+            if not rows:
+                rows = self._substring_rows(normalised_query, rarity_values, finish_values, japanese_only=False)
+            if not rows:
+                rows = self._all_rows(rarity_values, finish_values, japanese_only=False)
 
         ranked = sorted(
             ((self._score(normalised_query, row), self._to_card(row)) for row in rows),
             key=lambda item: (-item[0], item[1].english_name.casefold(), item[1].display_code),
         )
         return [card for score, card in ranked if score >= 55][:limit]
+
+    def _has_card_identities(self) -> bool:
+        return bool(self.connection.execute("SELECT 1 FROM card_identities LIMIT 1").fetchone())
+
+    @staticmethod
+    def _identity_select() -> str:
+        return """
+            SELECT -j.id AS id, j.set_code, j.collector_number, j.rarity, j.finish, j.finish_raw,
+                   i.english_name, i.japanese_name, i.aliases_json, i.normalised_name,
+                   i.normalised_aliases, i.mapping_source || '-' || i.status AS source,
+                   i.mapping_source_url AS source_url
+            FROM card_identities AS i
+            JOIN japanese_print_identity_links AS l ON l.card_identity_id=i.id
+            JOIN japanese_prints AS j ON j.id=l.japanese_print_id
+        """
+
+    def _identity_fts_rows(
+        self, query: str, rarities: tuple[str, ...], finishes: tuple[Finish, ...]
+    ) -> list[sqlite3.Row]:
+        tokens = [token for token in query.split() if token]
+        if not tokens:
+            return []
+        match_expression = " AND ".join(f'"{token}"*' for token in tokens)
+        conditions = ["card_identity_search MATCH ?"]
+        values: list[object] = [match_expression]
+        filters, filter_values = self._filter_conditions("j.", rarities, finishes)
+        conditions.extend(filters)
+        values.extend(filter_values)
+        try:
+            return self.connection.execute(
+                f"""
+                SELECT -j.id AS id, j.set_code, j.collector_number, j.rarity, j.finish, j.finish_raw,
+                       i.english_name, i.japanese_name, i.aliases_json, i.normalised_name,
+                       i.normalised_aliases, i.mapping_source || '-' || i.status AS source,
+                       i.mapping_source_url AS source_url
+                FROM card_identity_search
+                JOIN card_identities AS i ON i.id=CAST(card_identity_search.identity_id AS INTEGER)
+                JOIN japanese_print_identity_links AS l ON l.card_identity_id=i.id
+                JOIN japanese_prints AS j ON j.id=l.japanese_print_id
+                WHERE {' AND '.join(conditions)}
+                LIMIT 160
+                """,
+                values,
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+
+    def _identity_substring_rows(
+        self, query: str, rarities: tuple[str, ...], finishes: tuple[Finish, ...]
+    ) -> list[sqlite3.Row]:
+        conditions = ["(i.normalised_name LIKE ? OR i.normalised_aliases LIKE ?)"]
+        values: list[object] = [f"%{query}%", f"%{query}%"]
+        filters, filter_values = self._filter_conditions("j.", rarities, finishes)
+        conditions.extend(filters)
+        values.extend(filter_values)
+        return self.connection.execute(
+            self._identity_select() + f" WHERE {' AND '.join(conditions)} LIMIT 160", values
+        ).fetchall()
+
+    def _identity_all_rows(
+        self, rarities: tuple[str, ...], finishes: tuple[Finish, ...]
+    ) -> list[sqlite3.Row]:
+        conditions, values = self._filter_conditions("j.", rarities, finishes)
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        return self.connection.execute(self._identity_select() + where, values).fetchall()
 
     @staticmethod
     def _normalise_rarities(rarity: str | None, rarities: Iterable[str]) -> tuple[str, ...]:
@@ -1345,6 +1656,21 @@ class CatalogueRepository:
         return sorted({normalise_set_code(set_code) for set_code in set_codes if set_code.strip()})
 
     def _serial_selection_from_japanese(self, japanese: sqlite3.Row) -> CardPrint:
+        identity_row = self.connection.execute(
+            self._identity_select() + " WHERE j.id=?", (japanese['id'],)
+        ).fetchone()
+        if identity_row:
+            # Keep an existing cache ID for legacy callers only when it agrees
+            # with the shared identity.  It cannot revive a stale mapping.
+            mapped = self.connection.execute(
+                """
+                SELECT * FROM card_prints
+                WHERE set_code=? AND collector_number=? AND normalised_name=?
+                ORDER BY id LIMIT 1
+                """,
+                (japanese['set_code'], japanese['collector_number'], identity_row['normalised_name']),
+            ).fetchone()
+            return self._to_card(mapped) if mapped else self._to_card(identity_row)
         mapped = self.connection.execute(
             """
             SELECT * FROM card_prints
@@ -1399,6 +1725,20 @@ class CatalogueRepository:
             ).fetchone()
             if identity:
                 card = replace(card, japanese_name=identity['japanese_name'], source_url=identity['source_url'])
+            if not card.rarity:
+                card = replace(card, rarity="PR")
+        previous = self._japanese_by_reference(card.set_code, card.collector_number)
+        if previous and previous['japanese_name'] != card.japanese_name:
+            # A corrected official Japanese identity invalidates its search
+            # association.  It must be reviewed again rather than retaining a
+            # name that belonged to the old Japanese card.
+            self.connection.execute(
+                "DELETE FROM japanese_print_identity_links WHERE japanese_print_id=?", (previous['id'],)
+            )
+            self.connection.execute(
+                "DELETE FROM english_name_mappings WHERE japanese_print_id=?", (previous['id'],)
+            )
+            self._prune_orphan_card_identities()
         self.connection.execute(
             """
             INSERT INTO japanese_prints (
@@ -1432,7 +1772,24 @@ class CatalogueRepository:
         assert row is not None
         return row
 
-    def _official_english_by_reference(self, set_code: str, collector_number: str) -> list[sqlite3.Row]:
+    def _prune_orphan_card_identities(self) -> None:
+        rows = self.connection.execute(
+            """
+            SELECT i.id FROM card_identities AS i
+            LEFT JOIN japanese_print_identity_links AS l ON l.card_identity_id=i.id
+            WHERE l.card_identity_id IS NULL
+            """
+        ).fetchall()
+        if not rows:
+            return
+        self.connection.executemany(
+            "DELETE FROM card_identity_search WHERE identity_id=?", ((str(row['id']),) for row in rows)
+        )
+        self.connection.executemany("DELETE FROM card_identities WHERE id=?", ((row['id'],) for row in rows))
+
+    def _official_english_by_reference_unchecked(
+        self, set_code: str, collector_number: str
+    ) -> list[sqlite3.Row]:
         return self.connection.execute(
             """
             SELECT * FROM card_prints
@@ -1441,30 +1798,22 @@ class CatalogueRepository:
             (set_code, collector_number),
         ).fetchall()
 
-    def _link_japanese_print_to_official_cards(
-        self, official_rows: Iterable[sqlite3.Row], japanese: sqlite3.Row
-    ) -> None:
-        for official in official_rows:
-            self.connection.execute(
-                """
-                UPDATE card_prints
-                SET japanese_name = ?, finish = CASE WHEN ? != 'unknown' THEN ? ELSE finish END,
-                    finish_raw = COALESCE(?, finish_raw), imported_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (
-                    japanese["japanese_name"],
-                    japanese["finish"],
-                    japanese["finish"],
-                    japanese["finish_raw"],
-                    official["id"],
-                ),
-            )
-            refreshed = self.connection.execute(
-                "SELECT * FROM card_prints WHERE id = ?", (official["id"],)
-            ).fetchone()
-            assert refreshed is not None
-            self._refresh_search_row(refreshed)
+    def _archive_legacy_english_records_for_reference(
+        self, set_code: str, collector_number: str
+    ) -> int:
+        """Move same-reference English records to reference-only storage.
+
+        This function deliberately does not return an identity match. It is
+        called only while installing already-validated Japanese-name evidence,
+        so a legacy English row with a coincident printed number cannot leak
+        into the active Japanese catalogue.
+        """
+        rows = self._official_english_by_reference_unchecked(set_code, collector_number)
+        for row in rows:
+            self._archive_english_print_reference(row)
+            self.connection.execute("DELETE FROM card_search WHERE print_id=?", (str(row["id"]),))
+            self.connection.execute("DELETE FROM card_prints WHERE id=?", (row["id"],))
+        return len(rows)
 
     def _japanese_by_reference(self, set_code: str, collector_number: str) -> sqlite3.Row | None:
         return self.connection.execute(

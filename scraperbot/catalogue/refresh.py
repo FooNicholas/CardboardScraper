@@ -90,7 +90,7 @@ async def refresh_catalogue(
     )
     report("Verifying Japanese promo identities against the official PR table…")
     official_promos = await official_promo_importer(database, progress=report)
-    report("Linking shared official Japanese and English print references…")
+    report("Keeping official English print data as reference-only…")
     link_candidates, links_applied = official_linker(database)
     report("Mapping still-unmapped Japanese sets from Fandom…")
     fandom_items = await fandom_importer(
@@ -182,7 +182,7 @@ def main() -> None:
         parser.exit(2, f"Catalogue refresh failed: {error}\n")
     print(
         f"Imported {result.english_prints_imported} English and {result.japanese_prints_imported} Japanese prints; "
-        f"linked {result.official_links_applied}/{result.official_link_candidates} official references; "
+        f"kept {result.official_link_candidates} official references without Japanese serial links; "
         f"applied {result.fandom_mappings_applied} Fandom mappings; derived {result.derived_name_mappings} mappings; "
         f"saved {result.yuyutei_promo_result.entries_imported} Yuyu-Tei promo entries."
     )

@@ -113,7 +113,7 @@ def test_export_uses_canonical_identity_and_shows_conflicting_evidence(tmp_path)
             JapaneseCardPrint('DSS11', '001', 'R', '大地を駆ける守主 ルアン', 'https://jp/special'),
         ])
         c.apply_name_mappings([
-            EnglishNameMapping('DBT01', '001', 'RRR', 'Leuhan', 'official-english', 'https://en/main'),
+            EnglishNameMapping('DBT01', '001', 'RRR', 'Leuhan', 'fandom', 'https://fandom/main'),
             EnglishNameMapping('DSS11', '001', 'R', 'Another spelling', 'fandom', 'https://fandom/card'),
         ])
     export_yuyutei_promo_review(database, output)
@@ -184,7 +184,7 @@ def test_rejects_duplicate_approvals_without_last_record_winning(tmp_path):
     assert [issue.reason for issue in result.issues] == ['duplicate_approval', 'duplicate_approval']
 
 
-def test_approved_review_does_not_overwrite_later_mapping_or_map_unapproved_serials(tmp_path):
+def test_approved_review_links_same_japanese_name_but_does_not_overwrite_identity(tmp_path):
     database, output = tmp_path / 'db.sqlite3', tmp_path / 'review.json'
     _seed_unmapped_yuyutei_promos(database)
     with CatalogueRepository(database) as c:
@@ -195,7 +195,7 @@ def test_approved_review_does_not_overwrite_later_mapping_or_map_unapproved_seri
     assert result.mapping_result.mapped == 1
     assert result.mapping_result.derived == 0
     with CatalogueRepository(database) as c:
-        assert c.lookup_japanese_serial('DPR954').source == 'japanese-serial-only'
+        assert c.lookup_japanese_serial('DPR954').english_name == 'Leuhan'
     entry['english_name'] = 'Wrong replacement'
     output.write_text(json.dumps(payload))
     result = apply_yuyutei_promo_review(database, output)

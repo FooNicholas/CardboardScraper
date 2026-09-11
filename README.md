@@ -29,11 +29,17 @@ only after the user has chosen it.
   Offers remain labelled with their own print code, rarity, finish, stock, and
   availability.
 - An importable official English catalogue, including lazy-loaded result pages,
-  retained as an English-name mapping source.
+  retained as reference-only data for a future reviewed cross-region feature.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush, and
   VanHappy. Card Rush, VanHappy, and BigWeb search D-PR cards by their Japanese
   serial, including unmapped promos. Other Card Rush/VanHappy cards use
   Japanese-name search. All connectors require an exact printed reference.
+- English search is identity-first: a name and its aliases resolve to one
+  canonical Japanese card name, then return every linked Japanese printing.
+  Main-set, Special Series and D-PR reprints sharing that exact Japanese name
+  can be narrowed by rarity or finish. Japanese-name equality is the only
+  active grouping rule; English print serials are retained but never used as
+  mapping or equality evidence.
 - Per-store failures are isolated: one unavailable retailer does not prevent
   the other price from being returned.
 - A local Telegram long-polling runner. Deployment/webhook hosting is
@@ -50,7 +56,8 @@ pytest -q
 ```
 
 The full official English catalogue has already been built in the local,
-ignored `data/catalogue.sqlite3`. To rebuild it later:
+ignored `data/catalogue.sqlite3`. It is retained as reference-only data; its
+serials do not attach English names to Japanese prints. To refresh it later:
 
 ```sh
 scraperbot-import-official --all
@@ -98,9 +105,9 @@ computer only by default. You can run `scraperbot` in another terminal to use
 Telegram at the same time.
 
 For now, Telegram and the browser show only prints with a Japanese store-search
-name. The full English catalogue remains in the database to map English search
-names, but English-only printings are hidden because Yuyu-Tei does not stock
-them.
+name. The full English catalogue remains in the database as reference data,
+while Fandom-backed or reviewed English names map to Japanese names for search.
+English-only printings are hidden because Yuyu-Tei does not stock them.
 
 ## Japanese-only and newly released cards
 
@@ -109,7 +116,6 @@ card names. Refresh those cards in two explicit, local-only steps:
 
 ```sh
 scraperbot-import-japanese --set DZ-BT16
-scraperbot-link-official-japanese
 scraperbot-map-fandom --set DZ-BT16
 ```
 
@@ -119,25 +125,21 @@ deliberately excludes V-series and older formats:
 
 ```bash
 scraperbot-import-japanese --all
-scraperbot-link-official-japanese
 scraperbot-map-fandom --all
 scraperbot-derive-japanese-names
 scraperbot-repair-regional-mappings
 ```
 
 The first command imports the official Japanese print master: Japanese name,
-set code, collector number, and the official card URL. The second matches the
-official English catalogue by exact printed reference to link names that exist
-in both languages. The third reads the trusted Cardfight!!
-Vanguard Wiki Fandom set page through its public API and applies its English
+set code, collector number, and the official card URL. The second reads the
+trusted Cardfight!! Vanguard Wiki Fandom set page through its public API and applies its English
 names as `provisional` mappings. A base-card Fandom name is safely propagated
 to its parallel prints only when the official Japanese name is identical.
 The bulk Fandom command only visits sets with remaining unmapped Japanese
 prints; it keeps going if a page is unavailable and reports those sets for
-review. The final repair keeps D-PR/CP and D/DZ Special Series product codes
-region-specific: matching English and Japanese serials are never assumed to be
-the same card, and their Japanese name mappings are rebuilt from Fandom's
-Japanese-set page instead.
+review. The final repair rebuilds D-PR/CP and D/DZ Special Series mappings
+from Fandom's Japanese-set pages. No English serial is used for equality in
+any set family.
 
 To see what remains before a refresh or mapping review, use the local-only
 catalogue report. It makes no store or web requests:
@@ -198,9 +200,8 @@ not deleted. A later general Japanese import respects the verified PR name.
 If an official Japanese name changes, the old English mapping is cleared and
 must be resolved again. Otherwise approved review mappings and explicit
 cross-print evidence survive repair; remaining English names come from one
-unambiguous exact Japanese-name match in non-promo official/Fandom data. Main
-sets may supply official English names; Special Series use regional-safe Fandom
-evidence. Playable holo PRs inherit that English name and retain their own
+unambiguous exact Japanese-name Fandom match in non-promo data. Playable holo
+PRs inherit that English name and retain their own
 Japanese serial and finish. Energy, Energy Generator, Quick Shield, and Persona
 Shield need Japanese serial search only; English mapping is not planned for
 them. Yuyu-Tei still supplies retailer locations and explicit finish labels.
@@ -216,7 +217,7 @@ scraperbot-repair-promo-mappings
 The command removes stale Japanese-facing D-PR search records, preserves the
 official English promo catalogue only as internal reference data, restores
 approved reviews and explicit Fandom cross-print links, and maps a promo to a main-set card only when its exact
-Japanese name has one unambiguous official/Fandom name. Utility printings remain
+Japanese name has one unambiguous Fandom-backed name. Utility printings remain
 searchable by Japanese serial without English-name mapping. It never assumes an
 English and Japanese D-PR serial with the same number are the same card.
 
@@ -283,8 +284,8 @@ scraperbot-promo-review export data/dpr-promo-name-review-fresh.json
 Use a new filename each time: export refuses to overwrite existing reviews.
 The version-2 queue records the current canonical Japanese name and source,
 the official PR identity where available, and the retailer title separately.
-It includes exact-name candidate evidence from the same regional-safe
-official/Fandom sources used by the automatic repair. Conflicting candidates
+It includes exact-name candidate evidence from the same Fandom-backed sources
+used by the automatic repair. Conflicting candidates
 are shown together; none is automatically selected or translated.
 
 Review the JSON locally. Keep the identity fields unchanged. Set an entry's `status` to `approved`, fill in its
@@ -297,11 +298,14 @@ scraperbot-promo-review apply data/dpr-promo-name-review-fresh.json
 
 Only approved records that match a stored Yuyu-Tei D-PR entry are imported.
 Each approval must still match the current Japanese identity and source, and
-the print must remain unmapped. Stale/missing identities, official-name
+the Japanese card identity must remain unmapped. An approved name attaches to
+every Japanese printing with that exact canonical Japanese name; it never uses
+English serial equality or loose name similarity. Stale/missing identities, official-name
 conflicts, duplicate approvals, invalid names/aliases and already-resolved
 prints are skipped with a reason. Legacy version-1 files require a matching
-`japanese_name`; re-export older files that lack it. Imports affect only the
-explicitly approved serials, not other same-name promos. General automatic
+`japanese_name`; re-export older files that lack it. Imports affect the
+reviewed Japanese card identity and its exact-name printings, not merely one
+serial or similarly named cards. General automatic
 name repair remains a separate workflow. An existing mapping cannot be
 replaced by this unresolved-name review command.
 Energy, Energy Generator, Quick Shield, and Persona Shield entries are marked
@@ -313,9 +317,10 @@ The local `data/dpr-promo-name-review-2026-09-11-v2.json` snapshot contains
 It is an unapproved review artifact, not a new mapping import; the original
 review file has been preserved.
 
-When Bushiroad later publishes an English print, the official-English importer
-always preserves that name rather than replacing it with a Fandom mapping.
-There is still no translation request in the Telegram price path.
+When Bushiroad later publishes an English print, its serial and name remain in
+the reference archive. They do not modify Japanese-card equality or search
+mapping without a future explicit reviewed cross-print link. There is still no
+translation request in the Telegram price path.
 
 For a correction or a source that is not on Fandom, copy the shape in
 `data/catalogue.example.json`, add aliases for alternate spellings, and import

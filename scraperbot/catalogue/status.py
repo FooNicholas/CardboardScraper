@@ -43,8 +43,8 @@ def catalogue_status(database: Path) -> CatalogueStatus:
                 """
                 SELECT COUNT(*)
                 FROM japanese_prints AS j
-                LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
-                WHERE j.set_code IN ('DPR', 'CP') AND m.japanese_print_id IS NULL
+                LEFT JOIN japanese_print_identity_links AS l ON l.japanese_print_id = j.id
+                WHERE j.set_code IN ('DPR', 'CP') AND l.japanese_print_id IS NULL
                 """
             ).fetchone()[0]
         )
@@ -53,10 +53,10 @@ def catalogue_status(database: Path) -> CatalogueStatus:
                 f"""
                 SELECT COUNT(*)
                 FROM japanese_prints AS j
-                LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
+                LEFT JOIN japanese_print_identity_links AS l ON l.japanese_print_id = j.id
                 WHERE j.set_code IN ('DPR', 'CP')
                   AND j.japanese_name IN ({', '.join('?' for _ in HELD_UTILITY_PROMO_NAMES)})
-                  AND m.japanese_print_id IS NULL
+                  AND l.japanese_print_id IS NULL
                 """,
                 tuple(HELD_UTILITY_PROMO_NAMES),
             ).fetchone()[0]
@@ -79,8 +79,8 @@ def catalogue_status(database: Path) -> CatalogueStatus:
                     f"""
                     SELECT COUNT(*)
                     FROM japanese_prints AS j
-                    LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
-                    WHERE j.set_code IN ({placeholders}) AND m.japanese_print_id IS NULL
+                    LEFT JOIN japanese_print_identity_links AS l ON l.japanese_print_id = j.id
+                    WHERE j.set_code IN ({placeholders}) AND l.japanese_print_id IS NULL
                     """,
                     special_sets,
                 ).fetchone()[0]

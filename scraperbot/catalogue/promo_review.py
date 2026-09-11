@@ -37,10 +37,11 @@ class PromoReviewApplyResult:
 
 def _identity(catalogue: CatalogueRepository, number: str) -> sqlite3.Row | None:
     return catalogue.connection.execute(
-        """SELECT j.*, m.english_name AS mapped_name,
+        """SELECT j.*, i.english_name AS mapped_name,
                   o.japanese_name AS official_name, o.source_url AS official_url
            FROM japanese_prints j
-           LEFT JOIN english_name_mappings m ON m.japanese_print_id=j.id
+           LEFT JOIN japanese_print_identity_links l ON l.japanese_print_id=j.id
+           LEFT JOIN card_identities i ON i.id=l.card_identity_id
            LEFT JOIN official_promo_identities o ON o.collector_number=j.collector_number
            WHERE j.set_code='DPR' AND j.collector_number=?""",
         (number,),
