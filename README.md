@@ -138,6 +138,13 @@ region-specific: matching English and Japanese serials are never assumed to be
 the same card, and their Japanese name mappings are rebuilt from Fandom's
 Japanese-set page instead.
 
+To see what remains before a refresh or mapping review, use the local-only
+catalogue report. It makes no store or web requests:
+
+```sh
+scraperbot-catalogue-status
+```
+
 Some English reprints correspond to a Japanese promo with a different card
 number. Map those declared relationships for each relevant English set:
 
