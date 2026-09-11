@@ -173,6 +173,34 @@ translation or guesses from similar names.
 
 ### Japanese promo repair
 
+Japanese promo identity is now verified against Bushiroad's dedicated
+[official PR table](https://cf-vanguard.com/cardlist/card_pr). Run:
+
+```sh
+scraperbot-import-official-promos
+```
+
+This reads the table's pagination sequentially with a one-second pause between
+pages, validates the complete download, and updates Japanese D-PR serials and
+names before rebuilding English mappings locally. It also runs as part of
+`scraperbot-refresh-catalogue --apply`. No card-search request triggers it.
+The table is re-read on each explicit refresh because listings change within
+existing pages. A failed page prevents that snapshot from being applied.
+
+`official_promo_identities` stores the official name, detail URL, distribution
+information, any upcoming availability date, and verification timestamp.
+Upcoming cards are catalogue entries, not evidence of store availability.
+Only D-PR rows are imported; older PR/V-PR families are excluded. Existing
+rarity and finish annotations are preserved. Cards absent from the table are
+not deleted. A later general Japanese import respects the verified PR name.
+
+If an official Japanese name changes, the old English mapping is cleared and
+must be resolved again. Otherwise approved review mappings and explicit
+cross-print evidence survive repair; remaining English names come from one
+unambiguous exact Japanese-name match in the non-promo Fandom data. Energy,
+Energy Generator, Quick Shield, and Persona Shield English mappings remain
+held. Yuyu-Tei still supplies retailer locations and explicit finish labels.
+
 `D-PR` is different: Japanese and English promo serials have separate regional
 sequences, so an equal number cannot identify the same card. After importing
 or updating the catalogue, rebuild Japanese promo name mappings with:
@@ -183,7 +211,7 @@ scraperbot-repair-promo-mappings
 
 The command removes stale Japanese-facing D-PR search records, preserves the
 official English promo catalogue only as internal reference data, restores
-direct Fandom links, and maps a promo to a main-set card only when its exact
+approved reviews and explicit Fandom cross-print links, and maps a promo to a main-set card only when its exact
 Japanese name has one unambiguous Fandom name. Energy, Energy Generator, and
 Quick Shield printings are deliberately held without English search mappings
 until their shared utility-card workflow is resumed. It never assumes an

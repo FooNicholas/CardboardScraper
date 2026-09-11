@@ -41,7 +41,7 @@ def repair_promo_mappings(
         raise ValueError("Supply at least one promo print family.")
 
     with CatalogueRepository(database) as catalogue:
-        promo_prints = catalogue.japanese_prints(wanted)
+        reviewed = catalogue.reviewed_promo_mappings(wanted)
         # Direct Fandom evidence must be saved before the rebuild removes all
         # prior promo mapping rows.
         direct_mappings = [
@@ -51,6 +51,7 @@ def repair_promo_mappings(
         ]
         archived, removed = catalogue.clear_promo_mappings_for_rebuild(wanted)
         restored = catalogue.apply_name_mappings(direct_mappings).mapped
+        catalogue.apply_name_mappings(reviewed)
         inferred = catalogue.unambiguous_fandom_name_mappings(wanted)
         name_matched = catalogue.apply_name_mappings(inferred).mapped
         remaining = catalogue.unmapped_japanese_prints(wanted)

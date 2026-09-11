@@ -50,12 +50,12 @@ def catalogue_status(database: Path) -> CatalogueStatus:
         )
         held = int(
             connection.execute(
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM japanese_prints AS j
                 LEFT JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
                 WHERE j.set_code IN ('DPR', 'CP')
-                  AND j.japanese_name IN (?, ?, ?)
+                  AND j.japanese_name IN ({', '.join('?' for _ in HELD_UTILITY_PROMO_NAMES)})
                   AND m.japanese_print_id IS NULL
                 """,
                 tuple(HELD_UTILITY_PROMO_NAMES),

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import re
 import sqlite3
@@ -36,6 +36,7 @@ HELD_UTILITY_PROMO_NAMES = frozenset(
         "エネルギー",
         "エネルギージェネレーター",
         "四精織り成す清浄の盾",
+        "ペルソナシールド",
     }
 )
 
@@ -107,6 +108,15 @@ CREATE TABLE IF NOT EXISTS japanese_prints (
 );
 
 CREATE INDEX IF NOT EXISTS idx_japanese_prints_set ON japanese_prints(set_code);
+
+CREATE TABLE IF NOT EXISTS official_promo_identities (
+    collector_number TEXT PRIMARY KEY,
+    japanese_name TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    distribution TEXT NOT NULL,
+    available_from TEXT,
+    checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE TABLE IF NOT EXISTS promo_catalogue_entries (
     store_id TEXT NOT NULL,
@@ -499,6 +509,19 @@ class CatalogueRepository:
             )
             for row in rows
         ]
+
+    def reviewed_promo_mappings(self, set_codes: Iterable[str]) -> list[EnglishNameMapping]:
+        wanted = set(self._normalised_set_codes(set_codes)) & PROMO_PRINT_SET_CODES
+        rows = self.connection.execute(
+            """SELECT j.set_code,j.collector_number,j.rarity,m.*
+            FROM japanese_prints j JOIN english_name_mappings m ON m.japanese_print_id=j.id
+            WHERE m.mapping_source='promo-review' AND m.status='reviewed'"""
+        ).fetchall()
+        return [EnglishNameMapping(
+            row['set_code'], row['collector_number'], row['rarity'], row['english_name'],
+            row['mapping_source'], row['mapping_source_url'],
+            aliases=tuple(json.loads(row['aliases_json'])), status=row['status'],
+        ) for row in rows if row['set_code'] in wanted]
 
     def clear_region_specific_mappings_for_rebuild(
         self, set_codes: Iterable[str]
@@ -1355,6 +1378,13 @@ class CatalogueRepository:
     def _upsert_japanese(self, card: JapaneseCardPrint) -> sqlite3.Row:
         if not card.japanese_name:
             raise ValueError("A Japanese print requires a Japanese name.")
+        if card.set_code == "DPR":
+            identity = self.connection.execute(
+                "SELECT japanese_name,source_url FROM official_promo_identities WHERE collector_number=?",
+                (card.collector_number,),
+            ).fetchone()
+            if identity:
+                card = replace(card, japanese_name=identity['japanese_name'], source_url=identity['source_url'])
         self.connection.execute(
             """
             INSERT INTO japanese_prints (

@@ -14,6 +14,8 @@ from scraperbot.catalogue.japanese_name_deriver import derive_japanese_names
 from scraperbot.catalogue.official_importer import import_official_sets
 from scraperbot.catalogue.official_japanese_linker import link_official_english_names
 from scraperbot.catalogue.official_source import OfficialSourceError
+from scraperbot.catalogue.official_promos import import_official_promos
+from scraperbot.catalogue.promo_mapping_repair import repair_promo_mappings
 from scraperbot.catalogue.promo_catalogue_importer import (
     PromoCatalogueImportResult,
     import_yuyutei_promo_pages,
@@ -32,6 +34,7 @@ class CatalogueRefreshResult:
 
     english_prints_imported: int
     japanese_prints_imported: int
+    official_promo_identities: int
     official_link_candidates: int
     official_links_applied: int
     fandom_mappings_applied: int
@@ -49,6 +52,8 @@ async def refresh_catalogue(
     progress: Callable[[str], None] | None = None,
     official_importer: Callable[..., object] = import_official_sets,
     japanese_importer: Callable[..., object] = import_japanese_sets,
+    official_promo_importer: Callable[..., object] = import_official_promos,
+    promo_mapping_repairer: Callable[..., object] = repair_promo_mappings,
     official_linker: Callable[[Path], tuple[int, int]] = link_official_english_names,
     fandom_importer: Callable[..., object] = import_all_fandom_mappings,
     name_deriver: Callable[[Path], object] = derive_japanese_names,
@@ -83,6 +88,8 @@ async def refresh_catalogue(
             f"{'already imported' if count is None else f'{count} prints'}"
         ),
     )
+    report("Verifying Japanese promo identities against the official PR table…")
+    official_promos = await official_promo_importer(database, progress=report)
     report("Linking shared official Japanese and English print references…")
     link_candidates, links_applied = official_linker(database)
     report("Mapping still-unmapped Japanese sets from Fandom…")
@@ -117,9 +124,12 @@ async def refresh_catalogue(
                 f"Regional {set_code}: {error or f'{title}: {count} mappings'}"
             ),
         )
+    report("Rebuilding promo English mappings from verified Japanese identities…")
+    promo_mapping_repairer(database)
     return CatalogueRefreshResult(
         english_prints_imported=int(english_prints),
         japanese_prints_imported=int(japanese_prints),
+        official_promo_identities=int(official_promos),
         official_link_candidates=link_candidates,
         official_links_applied=links_applied,
         fandom_mappings_applied=fandom_mapped,

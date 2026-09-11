@@ -27,6 +27,13 @@ def test_refresh_orchestrates_only_approved_catalogue_sources(tmp_path: Path) ->
         calls.append("link")
         return 5, 4
 
+    async def official_promo_importer(_: Path, **kwargs: object) -> int:
+        calls.append("official-promos")
+        return 9
+
+    def promo_mapping_repairer(_: Path):
+        calls.append("promo-repair")
+
     async def fandom_importer(_: Path, **kwargs: object) -> list[FandomBatchItem]:
         calls.append("fandom")
         item = FandomBatchItem("DZBT99", "Example", MappingImportResult(6, 0, 0, 0))
@@ -51,6 +58,8 @@ def test_refresh_orchestrates_only_approved_catalogue_sources(tmp_path: Path) ->
             progress=progress.append,
             official_importer=official_importer,
             japanese_importer=japanese_importer,
+            official_promo_importer=official_promo_importer,
+            promo_mapping_repairer=promo_mapping_repairer,
             official_linker=official_linker,
             fandom_importer=fandom_importer,
             name_deriver=name_deriver,
@@ -58,7 +67,8 @@ def test_refresh_orchestrates_only_approved_catalogue_sources(tmp_path: Path) ->
         )
     )
 
-    assert calls == ["official", "japanese", "link", "fandom", "derive", "yuyutei"]
+    assert calls == ["official", "japanese", "official-promos", "link", "fandom", "derive", "yuyutei", "promo-repair"]
+    assert result.official_promo_identities == 9
     assert result.english_prints_imported == 3
     assert result.japanese_prints_imported == 4
     assert result.official_link_candidates == 5

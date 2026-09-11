@@ -43,6 +43,18 @@
 
 ## Promo and cross-print mapping
 
+- Use the official Japanese PR table at `https://cf-vanguard.com/cardlist/card_pr`
+  as the D-PR serial/name authority. Preserve distribution, upcoming availability
+  dates, and source provenance separately from English-name mappings.
+- Import the complete paginated snapshot before applying changes. Explicit
+  refreshes re-read existing pages sequentially with a one-second delay. A
+  failed download must not apply a partial snapshot. Never remove a local print
+  merely because it is absent from this table.
+- Preserve approved English reviews when Japanese identity is unchanged;
+  invalidate English evidence if the authoritative Japanese name changes.
+- Keep Persona Shield English mappings held alongside Energy, Energy Generator,
+  and Quick Shield; those shared names must not seed playable-card matches.
+
 - A card may be a Japanese promo but an English set inclusion, box topper, or
   other reprint. Different print codes do not mean different cards.
 - Cross-print links require an explicit, reviewable source—for example, the
@@ -87,11 +99,12 @@
 | Core catalogue and comparison | Complete | English fuzzy search, Japanese-print selection, local browser and Telegram interfaces, and exact-print comparisons from Yuyu-Tei, BigWeb, Card Rush, and VanHappy. |
 | Responsive local search during price checks | Implemented | The local browser now serves searches independently of an in-progress store comparison. A slow retailer response can delay that comparison, but it cannot make a new local catalogue search wait behind it. |
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
+| Official Japanese PR identity import | Implemented | `scraperbot-import-official-promos` imports the dedicated official D-PR table, then rebuilds English mappings. Integrated into the catalogue refresh before mapping. Local scan verified 1,806 identities, including upcoming D-PR/1839, and retained 37 existing D-PR records absent from the table. Preserves reviewed names unless Japanese identity changes, retains finish/rarity, and records upcoming releases separately from store stock. |
 | Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official links and generic English D-Promo-list links are blocked from identifying Japanese promos. The local repair retains only explicit Fandom cross-print evidence, then maps a promo through one exact Japanese-name match to verified non-promo Fandom data. Energy, Energy Generator, and Quick Shield mappings are explicitly on hold. `D-PR/953` → Guard Running Through The Earth, Leuhan is covered by regression tests. |
 | Special Series regional mapping audit | Complete | All imported D/DZ Special Series codes are region-specific like D-PR/CP. The repair rebuilt 1,736 Japanese prints across 27 D-SS/DZ-SS sets from their Fandom Japanese-set pages, with no remaining equal-serial official-English mappings. `DZ-SS10/018` now resolves to Caper Companion, never Vital Blaze Blast. |
 | Promo catalogue ingestion | Complete for current Yuyu-Tei scan | `scraperbot-import-yuyutei-promos --all` discovered every current numeric D-Promo group and stored 1,444 exact D-PR entries (numeric serials `1–1757`) from actual Yuyu-Tei listings. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. Empty range groups remain eligible for later refresh. |
 | Promo identity enrichment | Review workflow complete — content review pending | `scraperbot-promo-review export` creates a Yuyu-Tei-scoped JSON queue only for actually listed D-PR prints with no safe English mapping. The current queue has 953 playable entries; 81 Yuyu-Tei-listed utility entries are held. `apply` accepts only explicit approved entries and records their source URL. |
-| One-time translation review | Ready for reviewed input | Translate only unresolved playable names during review; enter the approved result and provenance through the local promo review file. Energy, Energy Generator, and Quick Shield remain held. No user search may trigger a translation. |
+| One-time translation review | Ready for reviewed input | After official PR import, 1,051 playable/upcoming D-PR prints need English evidence. 210 utility prints (including Persona Shield) are held. Translate unresolved playable names during review and retain provenance. No user search may trigger a translation. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
 | Finish / holo metadata | Implemented | Canonical Japanese prints and store offers retain raw finish text plus a normalised holo/standard/unknown value. A Yuyu-Tei D-PR title marked `H仕様` enriches that exact Japanese serial's local print record as holo and is displayed in search results; an explicitly conflicting retailer finish is excluded from an exact-print comparison. |
 | Rarity and finish filters | Implemented | The browser offers multi-select rarity and finish controls; Telegram and the search API accept `rarity:FFR,SEC` and `finish:holo`. The trailing-rarity shortcut remains supported. Unknown-finish printings stay visible when filtering by holo or standard. |
@@ -113,9 +126,10 @@
    English promo records and rebuilds Japanese D-PR search mappings. Its
    regression fixture requires `D-PR/953` to resolve to Leuhan rather than the
    unrelated English `D-PR/953EN` card.
-3. **Complete:** the repair builds its mapping index from existing direct
-   Fandom mappings and explicit Fandom cross-print links, keeping provenance
-   for every accepted result.
+3. **Complete:** the official PR table establishes Japanese serial/name identity.
+   The repair retains approved reviews and explicit Fandom cross-print links,
+   then uses non-promo Fandom Japanese-name matches. Generic English promo-list
+   serials are not Japanese identity evidence. Provenance is retained.
 4. **Complete:** a promo is mapped automatically only when its exact Japanese
    name has one verified English candidate. Energy, Energy Generator, and
    Quick Shield mappings are held pending a dedicated utility-card workflow.
@@ -139,18 +153,18 @@
    D-Promo page groups, recording only pages that currently contain exact
    listings. The current Yuyu-Tei scan found 1,444 entries through numeric
    serial `1757`; it never assumes a range label means every serial exists.
-9. **In progress:** enrich each actual Yuyu-Tei promo with official Japanese
-   data and explicit cross-print evidence. The 953 remaining playable entries
-   are ready for reviewed, one-time translations with provenance.
+9. **In progress:** official PR-table identities are imported before English
+   mapping. Remaining playable names still need explicit cross-print evidence
+   or reviewed, one-time translation. Re-export the Yuyu-Tei review queue to a
+   new file after a repair; old exported counts are historical snapshots.
 10. **Complete:** Japanese serial normalisation and exact lookup work in the
    catalogue search API, Telegram handler, and browser UI. Formatted serials
    resolve directly; bare numbers are rejected as ambiguous. An unmapped
    Japanese print can still be selected for exact comparison without creating
    an English mapping. English serials are import/mapping data only.
-11. **In progress:** Yuyu-Tei reads the exact saved range page for a selected
-   promo print. Add equivalent catalogue-location or serial-first metadata for
-   Card Rush, VanHappy, BigWeb, and later stores; they still receive the same
-   canonical `D-PR/1247` reference.
+11. **In progress:** Yuyu-Tei reads the exact saved range page and Card Rush
+   searches by the Japanese promo serial. VanHappy and BigWeb still need promo
+   catalogue-location or serial-first lookup support.
 12. Backfill promo ranges incrementally, verify exact-print offers and stock
    indicators against live listings, then mark each range complete in the
    import checkpoint.

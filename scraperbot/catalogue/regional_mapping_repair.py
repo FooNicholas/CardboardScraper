@@ -63,12 +63,15 @@ async def repair_region_specific_mappings(
             for mapping in catalogue.direct_fandom_mappings(wanted)
             if mapping.set_code not in PROMO_PRINT_SET_CODES or mapping.source == "fandom-cross-print"
         ]
+        reviewed = catalogue.reviewed_promo_mappings(wanted)
 
     source = source or FandomMappingSource()
     fetched_mappings: list[EnglishNameMapping] = []
     failures: list[str] = []
     pages_read = 0
     for set_code in wanted:
+        if set_code in PROMO_PRINT_SET_CODES:
+            continue
         try:
             title, mappings = await source.mappings_for_set(set_code)
         except OfficialSourceError as error:
@@ -98,6 +101,7 @@ async def repair_region_specific_mappings(
     with CatalogueRepository(database) as catalogue:
         archived, removed = catalogue.clear_region_specific_mappings_for_rebuild(wanted)
         restored = catalogue.apply_name_mappings(mappings_by_reference.values()).mapped
+        catalogue.apply_name_mappings(reviewed)
         inferred = catalogue.unambiguous_fandom_name_mappings(wanted)
         name_matched = catalogue.apply_name_mappings(inferred).mapped
         remaining = catalogue.unmapped_japanese_prints(wanted)
