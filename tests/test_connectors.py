@@ -5,9 +5,12 @@ import httpx
 
 from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardrush import CardRushConnector
+from scraperbot.connectors.amenitydream import AmenityDreamConnector
+from scraperbot.connectors.fullahead import FullAheadConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
 from scraperbot.connectors.olta import OltaConnector
+from scraperbot.connectors.torecolo import TorecoloConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
 from scraperbot.models import Availability, CardPrint
@@ -375,6 +378,45 @@ def test_mana_source_matches_serial_and_retains_a_sold_out_offer_without_price()
     assert offers[0].listing_url == "https://www.manasource.net/product/195805"
 
 
+def test_amenity_dream_matches_exact_serial_and_reports_stock() -> None:
+    html = """
+    <ul><li><a href="/product/136258"><img alt="【FFR】エグザサベイト・ドラゴン"><p>
+    VAN_DZ-BT16/FFR02_FFR</p><p>1,680円 (税込)</p><p>在庫数 2点</p></a><button>カートに入れる</button></li>
+    <li><a href="/product/other"><img alt="別のカード"><p>DZ-BT16/FFR03</p><p>100円</p></a></li></ul>
+    """
+    offers = AmenityDreamConnector.parse_html(CARD, html)
+    assert len(offers) == 1
+    assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (1680, Availability.IN_STOCK, 2)
+    assert offers[0].listing_url == "https://www.amenitydream.com/product/136258"
+
+
+def test_fullahead_matches_exact_serial_and_uses_detail_stock() -> None:
+    search_html = """
+    <div class="indexItemBox"><div><a href="/shop/shopdetail.html?brandcode=1"><img alt="DZ-BT16/FFR02 エグザサベイト・ドラゴン FFR"></a><strong>1,280円</strong></div>
+    <div><a href="/shop/shopdetail.html?brandcode=2"><img alt="DZ-BT16/FFR03 別のカード"></a><strong>100円</strong></div></div>
+    """
+    offers = FullAheadConnector.parse_html(CARD, search_html)
+    assert len(offers) == 1
+    assert offers[0].availability == Availability.UNKNOWN
+    detailed = FullAheadConnector._with_detail_stock(offers[0], '<span class="M_item-stock-smallstock">残りあと1点</span><a class="add_cart">cart</a>')
+    assert (detailed.price_yen, detailed.availability, detailed.stock_count) == (1280, Availability.IN_STOCK, 1)
+
+
+def test_torecolo_matches_its_hyphenated_product_code_and_keeps_oos_price() -> None:
+    html = """
+    <dl class="block-thumbnail-t--goods"><a href="/shop/g/gDZ-BT16-FFR02/" title="エグザサベイト・ドラゴン FFR"></a>
+    <div>1,200円（税込）</div><p>在庫 <span>3</span></p></dl>
+    <dl class="block-thumbnail-t--goods"><a href="/shop/g/gDZ-BT16-FFR03/" title="別のカード"></a><div>100円</div><p>在庫 1</p></dl>
+    <dl class="block-thumbnail-t--goods"><a href="/shop/g/gDZ-BT16-FFR02/" title="エグザサベイト・ドラゴン FFR"></a><div>980円</div><p>在庫 0</p><span>売切れ</span></dl>
+    """
+    offers = TorecoloConnector.parse_html(CARD, html)
+    assert [(offer.price_yen, offer.availability, offer.stock_count) for offer in offers] == [
+        (1200, Availability.IN_STOCK, 3),
+        (980, Availability.SOLD_OUT, 0),
+    ]
+    assert offers[0].listing_url == "https://www.torecolo.jp/shop/g/gDZ-BT16-FFR02/"
+
+
 def test_new_store_connectors_search_by_hyphenated_japanese_serial() -> None:
     requests: dict[str, str | None] = {}
 
@@ -390,10 +432,14 @@ def test_new_store_connectors_search_by_hyphenated_japanese_serial() -> None:
             await OltaConnector(client).search(CARD)
             await ManzokuyaConnector(client).search(CARD)
             await ManaSourceConnector(client).search(CARD)
+            await AmenityDreamConnector(client).search(CARD)
+            await TorecoloConnector(client).search(CARD)
 
     asyncio.run(run())
     assert requests == {
         "olta-tcg.com": None,
         "shopmanzokuya.com": "DZ-BT16/FFR02",
         "www.manasource.net": "DZ-BT16/FFR02",
+        "www.amenitydream.com": "DZ-BT16/FFR02",
+        "www.torecolo.jp": "DZ-BT16-FFR02",
     }

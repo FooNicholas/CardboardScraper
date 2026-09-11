@@ -10,9 +10,12 @@ from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.config import Settings
 from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardrush import CardRushConnector
+from scraperbot.connectors.amenitydream import AmenityDreamConnector
+from scraperbot.connectors.fullahead import FullAheadConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
 from scraperbot.connectors.olta import OltaConnector
+from scraperbot.connectors.torecolo import TorecoloConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
 from scraperbot.services.comparison import ComparisonService
@@ -38,6 +41,9 @@ def build_application(settings: Settings | None = None) -> Application:
                 OltaConnector(),
                 ManzokuyaConnector(),
                 ManaSourceConnector(),
+                FullAheadConnector(),
+                AmenityDreamConnector(),
+                TorecoloConnector(),
             )
         ),
     )
