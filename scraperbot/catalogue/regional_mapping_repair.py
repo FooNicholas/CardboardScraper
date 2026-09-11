@@ -12,6 +12,7 @@ from scraperbot.catalogue.fandom_source import FandomMappingSource
 from scraperbot.catalogue.official_source import OfficialSourceError
 from scraperbot.catalogue.repository import (
     HELD_UTILITY_PROMO_NAMES,
+    PROMO_PRINT_SET_CODES,
     CatalogueRepository,
     is_region_specific_print_set,
 )
@@ -57,7 +58,11 @@ async def repair_region_specific_mappings(
             raise ValueError("No imported regional promo or Special Series set is available to repair.")
         if not all(is_region_specific_print_set(set_code) for set_code in wanted):
             raise ValueError("Only promo and Special Series set codes may be repaired here.")
-        retained_mappings = catalogue.direct_fandom_mappings(wanted)
+        retained_mappings = [
+            mapping
+            for mapping in catalogue.direct_fandom_mappings(wanted)
+            if mapping.set_code not in PROMO_PRINT_SET_CODES or mapping.source == "fandom-cross-print"
+        ]
 
     source = source or FandomMappingSource()
     fetched_mappings: list[EnglishNameMapping] = []
@@ -71,7 +76,15 @@ async def repair_region_specific_mappings(
             if progress:
                 progress(set_code, None, 0, str(error))
             continue
-        fetched_mappings.extend(mappings)
+        # The generic English D-Promo page shares serials with Japanese D-PR
+        # cards but does not prove those prints are the same card. Keep only
+        # explicit cross-print evidence for promo families; non-promo special
+        # set pages remain direct Fandom evidence.
+        fetched_mappings.extend(
+            mapping
+            for mapping in mappings
+            if mapping.set_code not in PROMO_PRINT_SET_CODES or mapping.source == "fandom-cross-print"
+        )
         pages_read += 1
         if progress:
             progress(set_code, title, len(mappings), None)

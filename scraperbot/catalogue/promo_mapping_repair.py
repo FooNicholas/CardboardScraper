@@ -26,12 +26,15 @@ def repair_promo_mappings(
 ) -> PromoMappingRepairResult:
     """Rebuild selected Japanese promo family mappings from trusted evidence.
 
-    Existing direct Fandom links are retained. Remaining promo prints can
-    inherit one unambiguous direct Fandom English name from a non-promo
-    Japanese printing. Energy, Energy Generator, and Quick Shield printings
-    are deliberately left without English search mappings while their shared
-    utility-card workflow is on hold. English promo references are archived
-    for internal cross-print research and are never Japanese identity evidence.
+    Only explicit Fandom cross-print links are retained. The generic English
+    D-Promo list cannot identify a Japanese promo by equal serial: regional
+    sequences reuse numbers for unrelated cards (for example D-PR/953).
+    Remaining promo prints can inherit one unambiguous direct Fandom English
+    name from a non-promo Japanese printing. Energy, Energy Generator, and
+    Quick Shield printings are deliberately left without English search
+    mappings while their shared utility-card workflow is on hold. English
+    promo references are archived for internal cross-print research and are
+    never Japanese identity evidence.
     """
     wanted = tuple(sorted({normalise_set_code(code) for code in set_codes if code.strip()}))
     if not wanted:
@@ -44,6 +47,7 @@ def repair_promo_mappings(
         direct_mappings = [
             mapping
             for mapping in catalogue.direct_fandom_mappings(wanted)
+            if mapping.source == "fandom-cross-print"
         ]
         archived, removed = catalogue.clear_promo_mappings_for_rebuild(wanted)
         restored = catalogue.apply_name_mappings(direct_mappings).mapped

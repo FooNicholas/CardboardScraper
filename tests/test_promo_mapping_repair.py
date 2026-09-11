@@ -67,6 +67,47 @@ def test_repair_replaces_false_promo_serial_mapping_with_fandom_name_match(tmp_p
         assert archived["english_name"] == "Nebula Knight of Glory, Serius"
 
 
+def test_repair_rejects_a_generic_fandom_promo_serial_mapping(tmp_path: Path) -> None:
+    database = tmp_path / "catalogue.sqlite3"
+    with CatalogueRepository(database) as catalogue:
+        catalogue.import_japanese_many(
+            [
+                JapaneseCardPrint("D-PR", "953", "PR", "大地を駆ける守主 ルアン", "https://jp/dpr953"),
+                JapaneseCardPrint("D-SS11", "108", "R", "大地を駆ける守主 ルアン", "https://jp/dss11108"),
+            ]
+        )
+        catalogue.apply_name_mappings(
+            [
+                EnglishNameMapping(
+                    "D-PR",
+                    "953",
+                    "PR",
+                    "Nebula Knight of Glory, Serius",
+                    "fandom",
+                    "https://cardfight.fandom.com/wiki/List_of_D_Promo_Cards",
+                ),
+                EnglishNameMapping(
+                    "D-SS11",
+                    "108",
+                    "R",
+                    "Guard Running Through The Earth, Leuhan",
+                    "fandom",
+                    "https://cardfight.fandom.com/wiki/D_Special_Series_11:_Triple_Drive_Booster",
+                ),
+            ]
+        )
+
+    result = repair_promo_mappings(database)
+
+    assert result.restored_direct_fandom == 0
+    assert result.mapped_by_japanese_name == 1
+    with CatalogueRepository(database) as catalogue:
+        repaired = catalogue.lookup_japanese_serial("D-PR/953")
+        assert repaired is not None
+        assert repaired.english_name == "Guard Running Through The Earth, Leuhan"
+        assert not catalogue.search("nebula knight of glory", japanese_only=True)
+
+
 def test_new_official_promo_import_is_archived_not_user_searchable(tmp_path: Path) -> None:
     with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
         catalogue.upsert(

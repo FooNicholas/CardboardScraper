@@ -10,7 +10,8 @@ from pathlib import Path
 
 from scraperbot.catalogue.fandom_source import FandomMappingSource
 from scraperbot.catalogue.official_source import OfficialSourceError
-from scraperbot.catalogue.repository import CatalogueRepository, MappingImportResult
+from scraperbot.catalogue.repository import PROMO_PRINT_SET_CODES, CatalogueRepository, MappingImportResult
+from scraperbot.models import normalise_set_code
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +25,11 @@ class FandomBatchItem:
 async def import_fandom_mappings(
     database: Path, set_code: str, *, page_title: str | None = None
 ) -> tuple[str, MappingImportResult]:
+    if normalise_set_code(set_code) in PROMO_PRINT_SET_CODES:
+        raise ValueError(
+            "The generic D-Promo Fandom page cannot safely map Japanese promos by serial. "
+            "Use the promo repair and review workflow instead."
+        )
     title, mappings = await FandomMappingSource().mappings_for_set(set_code, page_title=page_title)
     with CatalogueRepository(database) as catalogue:
         return title, catalogue.apply_name_mappings(mappings)
@@ -38,7 +44,13 @@ async def import_all_fandom_mappings(
     """Map every still-unmapped Japanese set without stopping on one failure."""
     source = source or FandomMappingSource()
     with CatalogueRepository(database) as catalogue:
-        set_codes = catalogue.unmapped_japanese_set_codes()
+        # D-PR/CP serials are region-specific. Their generic English Fandom
+        # list is evidence for English printings, not a Japanese identity map.
+        set_codes = [
+            set_code
+            for set_code in catalogue.unmapped_japanese_set_codes()
+            if set_code not in PROMO_PRINT_SET_CODES
+        ]
         items: list[FandomBatchItem] = []
         for index, set_code in enumerate(set_codes, start=1):
             try:
@@ -82,7 +94,7 @@ def main() -> None:
             print(f"Applied {mapped} Fandom mappings; {failed} set pages need review.")
             return
         title, result = asyncio.run(import_fandom_mappings(args.database, args.set, page_title=args.page))
-    except OfficialSourceError as error:
+    except (OfficialSourceError, ValueError) as error:
         parser.exit(2, f"Fandom mapping import failed: {error}\n")
     print(
         f"Applied Fandom page {title!r}: {result.mapped} mapped ({result.derived} parallel variants derived), "

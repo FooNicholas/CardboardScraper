@@ -8,7 +8,11 @@ from scraperbot.models import EnglishNameMapping, JapaneseCardPrint
 
 
 class FakeFandomSource:
+    def __init__(self) -> None:
+        self.requested_sets: list[str] = []
+
     async def mappings_for_set(self, set_code: str) -> tuple[str, list[EnglishNameMapping]]:
+        self.requested_sets.append(set_code)
         if set_code == "DBT02":
             raise OfficialSourceError("No matching Fandom page")
         return (
@@ -34,3 +38,20 @@ def test_bulk_fandom_import_continues_after_an_unavailable_set(tmp_path: Path) -
     assert items[1].error == "No matching Fandom page"
     with CatalogueRepository(database) as catalogue:
         assert catalogue.search("mapped")[0].japanese_name == "マップ済み"
+
+
+def test_bulk_fandom_import_skips_region_specific_promo_lists(tmp_path: Path) -> None:
+    database = tmp_path / "catalogue.sqlite3"
+    source = FakeFandomSource()
+    with CatalogueRepository(database) as catalogue:
+        catalogue.import_japanese_many(
+            [
+                JapaneseCardPrint("D-PR", "953", "PR", "大地を駆ける守主 ルアン", "https://official/dpr953"),
+                JapaneseCardPrint("D-BT01", "001", "RRR", "マップ済み", "https://official/1"),
+            ]
+        )
+
+    items = asyncio.run(import_all_fandom_mappings(database, source=source))  # type: ignore[arg-type]
+
+    assert [item.set_code for item in items] == ["DBT01"]
+    assert source.requested_sets == ["DBT01"]
