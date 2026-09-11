@@ -14,6 +14,17 @@ from scraperbot.catalogue.repository import PROMO_PRINT_SET_CODES, CatalogueRepo
 from scraperbot.models import normalise_set_code
 
 
+# The local catalogue deliberately excludes V-era products from automatic
+# English-name mapping. Their historical print data may remain stored, but a
+# standard-format search refresh must not make them user-facing again.
+V_SERIES_SET_PREFIXES = ("DPS", "DPV", "DVS")
+
+
+def is_supported_standard_set(set_code: str) -> bool:
+    """Whether a Japanese set belongs to the supported D/DZ scope."""
+    return not normalise_set_code(set_code).startswith(V_SERIES_SET_PREFIXES)
+
+
 @dataclass(frozen=True, slots=True)
 class FandomBatchItem:
     set_code: str
@@ -49,7 +60,7 @@ async def import_all_fandom_mappings(
         set_codes = [
             set_code
             for set_code in catalogue.unmapped_japanese_set_codes()
-            if set_code not in PROMO_PRINT_SET_CODES
+            if set_code not in PROMO_PRINT_SET_CODES and is_supported_standard_set(set_code)
         ]
         items: list[FandomBatchItem] = []
         for index, set_code in enumerate(set_codes, start=1):

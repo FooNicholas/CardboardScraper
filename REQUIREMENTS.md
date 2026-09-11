@@ -135,10 +135,11 @@
 | Official Japanese PR identity import | Implemented | `scraperbot-import-official-promos` imports the dedicated official D-PR table, then rebuilds English mappings. Integrated into the catalogue refresh before mapping. Local scan verified 1,806 identities, including upcoming D-PR/1839, and retained 37 existing D-PR records absent from the table. Preserves reviewed names unless Japanese identity changes, retains finish/rarity, and records upcoming releases separately from store stock. |
 | Promo mapping audit and correction | Implemented for current D-PR data | English serial links and generic English D-Promo-list links cannot identify Japanese promos. Repair retains approved reviews and explicit Fandom cross-print evidence, then uses an unambiguous exact Japanese-name Fandom match. Utility cards intentionally use serial search only. `D-PR/953` → Guard Running Through The Earth, Leuhan is covered by regression tests. |
 | English-reference equality audit | Complete | All legacy mapping rows inferred from English printed references are archived, while the English serial/name records remain available for future reviewed features. `DZ-SS10/018` resolves to Caper Companion and Japanese `D-BT09/Re06` no longer resolves to Trickmoon. |
+| Supported-format mapping scope | Complete | Automatic Fandom refresh covers supported D/DZ products and explicitly skips `D-PS`, `D-PV`, and `D-VS` V-era products. Their stored data remains inactive, so a later refresh cannot make V-series cards searchable again. |
 | Promo catalogue ingestion | Complete for current Yuyu-Tei scan | `scraperbot-import-yuyutei-promos --all` discovered every current numeric D-Promo group and stored 1,444 exact D-PR entries (numeric serials `1–1757`) from actual Yuyu-Tei listings. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. Empty range groups remain eligible for later refresh. |
-| Promo identity enrichment | Review workflow complete — content review pending | Current Yuyu-Tei scope: 1,444 entries, 958 English-mapped, 371 unresolved playable, and 115 intentionally serial-only utility entries. Existing exported JSON is historical; export to a new file to obtain the current queue. `apply` accepts explicit approvals with provenance. |
-| One-time translation review | Ready for reviewed input | Current D-PR data has 545 unresolved playable/upcoming prints: 472 without an eligible exact-name candidate and 73 with conflicting names. Review only playable cards; 210 utility prints intentionally require no English mapping. No user search may trigger a translation. |
-| Evidence-backed review and stale-approval protection | Implemented | Version-2 review exports use canonical/official Japanese identity, separate retailer titles, and shared regional-safe candidate evidence. Export preserves existing files; apply rejects stale/duplicate/invalid approvals and resolved targets with reasons. Fresh local Yuyu-Tei queue: 327 no-candidate playable prints, 44 conflicting-candidate playable prints, 115 serial-only utility prints. No mappings were applied. |
+| Promo identity enrichment | Review workflow complete — content review pending | Current Yuyu-Tei scope: 1,444 entries, 985 English-mapped, 344 unresolved playable, and 115 intentionally serial-only utility entries. `data/dpr-promo-name-review-2026-09-11-v3.json` is the fresh unapproved queue; `apply` accepts explicit approvals with provenance. |
+| One-time translation review | Ready for reviewed input | Current D-PR data has 491 unresolved playable/upcoming prints. Of the 1,444 Yuyu-Tei-listed records, 328 have no eligible exact-name candidate and 16 have conflicting candidates; the remaining unresolved official PR entries are not in the current retailer scope. Review only playable cards; 210 utility prints intentionally require no English mapping. No user search may trigger a translation. |
+| Evidence-backed review and stale-approval protection | Implemented | Version-2 review exports use canonical/official Japanese identity, separate retailer titles, and Fandom-backed exact-name candidate evidence. Export preserves existing files; apply rejects stale/duplicate/invalid approvals and resolved targets with reasons. Fresh local Yuyu-Tei queue: 328 no-candidate playable prints, 16 conflicting-candidate playable prints, and 115 serial-only utility prints. No entries are approved. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
 | Finish / holo metadata | Implemented | Canonical Japanese prints and store offers retain raw finish text plus a normalised holo/standard/unknown value. A Yuyu-Tei D-PR title marked `H仕様` enriches that exact Japanese serial's local print record as holo and is displayed in search results; an explicitly conflicting retailer finish is excluded from an exact-print comparison. |
 | Rarity and finish filters | Implemented | The browser offers multi-select rarity and finish controls; Telegram and the search API accept `rarity:FFR,SEC` and `finish:holo`. The trailing-rarity shortcut remains supported. Unknown-finish printings stay visible when filtering by holo or standard. |
@@ -153,12 +154,12 @@
 ### Planned promo implementation sequence
 
 Current database snapshot after archiving English-number equality claims:
-16,219 Japanese prints overall; 2,064 canonical Japanese-name identities link
-5,545 physical printings. The 11,079 former English-number mapping claims are
+16,219 Japanese prints overall; 6,413 canonical Japanese-name identities link
+14,382 physical printings. The 11,079 former English-number mapping claims are
 in the local archive, alongside retained English serial/name reference data.
-1,844 promo prints include 1,051 playable records awaiting Fandom-backed or
+1,844 promo prints include 491 playable records awaiting Fandom-backed or
 reviewed English names; 210 utility prints remain intentionally serial-only.
-Of 1,736 Special Series prints across 27 sets, only 34 remain unmapped because
+Of 1,736 Special Series prints across 27 sets, only 41 remain unmapped because
 exact Japanese-name Fandom evidence links the rest. Counts describe print
 records, not distinct card names.
 
@@ -203,13 +204,13 @@ records, not distinct card names.
    D-Promo page groups, recording only pages that currently contain exact
    listings. The current Yuyu-Tei scan found 1,444 entries through numeric
    serial `1757`; it never assumes a range label means every serial exists.
-9. **In progress:** official PR-table identities are imported before English
-   mapping. Remaining playable names still need explicit cross-print evidence
-   or reviewed, one-time translation. Re-export the Yuyu-Tei review queue to a
-   new file after a repair; old exported counts are historical snapshots.
-   The fresh `data/dpr-promo-name-review-2026-09-11-v2.json` queue contains 371
-   unresolved playable entries (327 no eligible candidate, 44 conflicts) and
-   115 intentionally serial-only utility entries. No entries are approved.
+9. **Ready for content review:** official PR-table identities are imported
+   before English mapping. Remaining playable names still need explicit
+   cross-print evidence or reviewed, one-time translation. The fresh
+   `data/dpr-promo-name-review-2026-09-11-v3.json` queue contains 344
+   unresolved playable retailer entries (328 no eligible candidate, 16
+   conflicts) and 115 intentionally serial-only utility entries. No entries
+   are approved.
 10. **Complete:** Japanese serial normalisation and exact lookup work in the
    catalogue search API, Telegram handler, and browser UI. Formatted serials
    resolve directly; bare numbers are rejected as ambiguous. An unmapped

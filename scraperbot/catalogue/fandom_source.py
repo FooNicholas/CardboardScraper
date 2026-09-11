@@ -17,8 +17,9 @@ from scraperbot.models import CardPrint, EnglishNameMapping, normalise_collector
 class FandomMappingSource:
     """Read trusted community English names through Fandom's public API.
 
-    Fandom mappings are explicitly stored as ``provisional``. When Bushiroad
-    publishes the card in English, the official importer wins for that print.
+    Fandom mappings are explicitly stored as ``provisional``. Official English
+    print references remain archived data and never replace a Japanese-name
+    mapping merely because their printed serials match.
     """
 
     api_url = "https://cardfight.fandom.com/api.php"

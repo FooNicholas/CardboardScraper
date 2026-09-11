@@ -55,3 +55,22 @@ def test_bulk_fandom_import_skips_region_specific_promo_lists(tmp_path: Path) ->
 
     assert [item.set_code for item in items] == ["DBT01"]
     assert source.requested_sets == ["DBT01"]
+
+
+def test_bulk_fandom_import_skips_v_series_products(tmp_path: Path) -> None:
+    database = tmp_path / "catalogue.sqlite3"
+    source = FakeFandomSource()
+    with CatalogueRepository(database) as catalogue:
+        catalogue.import_japanese_many(
+            [
+                JapaneseCardPrint("D-BT01", "001", "RRR", "Dカード", "https://official/d"),
+                JapaneseCardPrint("D-PS01", "001", "RRR", "Pカード", "https://official/p"),
+                JapaneseCardPrint("D-PV01", "001", "RRR", "PVカード", "https://official/pv"),
+                JapaneseCardPrint("D-VS01", "001", "RRR", "Vカード", "https://official/v"),
+            ]
+        )
+
+    items = asyncio.run(import_all_fandom_mappings(database, source=source))  # type: ignore[arg-type]
+
+    assert [item.set_code for item in items] == ["DBT01"]
+    assert source.requested_sets == ["DBT01"]
