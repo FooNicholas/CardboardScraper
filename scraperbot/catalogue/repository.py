@@ -761,11 +761,11 @@ class CatalogueRepository:
         return [self._to_promo_entry(row) for row in rows]
 
     def unambiguous_fandom_name_mappings(self, set_codes: Iterable[str]) -> list[EnglishNameMapping]:
-        """Map selected prints from one exact Japanese-name Fandom candidate.
+        """Map prints from one exact Japanese-name official/Fandom candidate.
 
-        This intentionally uses direct Fandom mappings outside the promo
-        families. It avoids the false premise that equal regional promo serials
-        identify the same card.
+        The historical method name is retained for the repair commands. Direct
+        official English evidence is eligible for shared-number release sets;
+        Special Series must use regional-safe Fandom evidence instead.
         """
         wanted = self._normalised_set_codes(set_codes)
         if not wanted:
@@ -782,19 +782,25 @@ class CatalogueRepository:
         ).fetchall()
         source_rows = self.connection.execute(
             """
-            SELECT j.japanese_name, m.english_name, m.aliases_json, m.mapping_source_url
+            SELECT j.set_code, j.japanese_name, m.english_name, m.aliases_json,
+                   m.mapping_source, m.mapping_source_url
             FROM japanese_prints AS j
             JOIN english_name_mappings AS m ON m.japanese_print_id = j.id
             WHERE j.set_code NOT IN ('DPR', 'CP')
-              AND m.mapping_source IN ('fandom', 'fandom-cross-print')
-            ORDER BY m.imported_at DESC
+              AND m.mapping_source IN ('fandom', 'fandom-cross-print', 'official-english')
+            ORDER BY CASE WHEN m.mapping_source='official-english' THEN 0 ELSE 1 END,
+                     m.imported_at DESC
             """
         ).fetchall()
         candidates: dict[str, dict[str, sqlite3.Row]] = {}
         for row in source_rows:
+            if row['mapping_source'] == 'official-english' and is_region_specific_print_set(row['set_code']):
+                continue
             candidates.setdefault(str(row["japanese_name"]), {}).setdefault(str(row["english_name"]), row)
         mappings: list[EnglishNameMapping] = []
         for target in target_rows:
+            if target['japanese_name'] in HELD_UTILITY_PROMO_NAMES:
+                continue
             names = candidates.get(str(target["japanese_name"]), {})
             if len(names) != 1:
                 continue
@@ -806,7 +812,7 @@ class CatalogueRepository:
                     rarity=target["rarity"],
                     english_name=source["english_name"],
                     aliases=tuple(json.loads(source["aliases_json"])),
-                    source="fandom-name-match",
+                    source="official-name-match" if source['mapping_source'] == 'official-english' else "fandom-name-match",
                     source_url=source["mapping_source_url"],
                     status="provisional",
                 )

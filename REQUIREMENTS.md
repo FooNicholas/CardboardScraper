@@ -3,7 +3,9 @@
 ## Catalogue scope
 
 - Cover current Standard-era Japanese prints, including D and DZ promo cards.
-- Catalogue only two item types: playable cards and Energy cards.
+- Catalogue playable cards and Japanese utility cards (Energy, Energy Generator,
+  Quick Shield, and Persona Shield). Utility cards need Japanese serial search
+  only; their English-name mapping is not outstanding implementation work.
 - Keep each physical printing distinct by its printed set code and collector
   number, even when the Japanese and English releases use different codes.
 - Treat D-PR/CP and every D/DZ Special Series (`D-SS`/`DZ-SS`) set code as
@@ -52,8 +54,14 @@
   merely because it is absent from this table.
 - Preserve approved English reviews when Japanese identity is unchanged;
   invalidate English evidence if the authoritative Japanese name changes.
-- Keep Persona Shield English mappings held alongside Energy, Energy Generator,
-  and Quick Shield; those shared names must not seed playable-card matches.
+- Keep utility cards searchable by Japanese serial without an English mapping;
+  those shared names must not seed playable-card matches. Existing internal
+  `held` flags mean intentionally excluded from translation, not pending work.
+- Playable promo reprints, including holo variants, must inherit an English
+  search name when their exact Japanese name resolves unambiguously to a mapped
+  main-set or Special Series card. Use official English evidence on shared-number
+  main sets and regional-safe Fandom evidence on Special Series. Conflicting
+  names remain unresolved. Keep the Japanese serial, rarity, and finish distinct.
 
 - A card may be a Japanese promo but an English set inclusion, box topper, or
   other reprint. Different print codes do not mean different cards.
@@ -100,11 +108,11 @@
 | Responsive local search during price checks | Implemented | The local browser now serves searches independently of an in-progress store comparison. A slow retailer response can delay that comparison, but it cannot make a new local catalogue search wait behind it. |
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
 | Official Japanese PR identity import | Implemented | `scraperbot-import-official-promos` imports the dedicated official D-PR table, then rebuilds English mappings. Integrated into the catalogue refresh before mapping. Local scan verified 1,806 identities, including upcoming D-PR/1839, and retained 37 existing D-PR records absent from the table. Preserves reviewed names unless Japanese identity changes, retains finish/rarity, and records upcoming releases separately from store stock. |
-| Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official links and generic English D-Promo-list links are blocked from identifying Japanese promos. The local repair retains only explicit Fandom cross-print evidence, then maps a promo through one exact Japanese-name match to verified non-promo Fandom data. Energy, Energy Generator, and Quick Shield mappings are explicitly on hold. `D-PR/953` → Guard Running Through The Earth, Leuhan is covered by regression tests. |
+| Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official links and generic English D-Promo-list links are blocked from identifying Japanese promos. Repair retains approved reviews and explicit cross-print evidence, then uses an unambiguous exact Japanese-name match to official main-set or regional-safe Fandom data. Utility cards intentionally use serial search only. `D-PR/953` → Guard Running Through The Earth, Leuhan is covered by regression tests. |
 | Special Series regional mapping audit | Complete | All imported D/DZ Special Series codes are region-specific like D-PR/CP. The repair rebuilt 1,736 Japanese prints across 27 D-SS/DZ-SS sets from their Fandom Japanese-set pages, with no remaining equal-serial official-English mappings. `DZ-SS10/018` now resolves to Caper Companion, never Vital Blaze Blast. |
 | Promo catalogue ingestion | Complete for current Yuyu-Tei scan | `scraperbot-import-yuyutei-promos --all` discovered every current numeric D-Promo group and stored 1,444 exact D-PR entries (numeric serials `1–1757`) from actual Yuyu-Tei listings. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. Empty range groups remain eligible for later refresh. |
-| Promo identity enrichment | Review workflow complete — content review pending | `scraperbot-promo-review export` creates a Yuyu-Tei-scoped JSON queue only for actually listed D-PR prints with no safe English mapping. The current queue has 953 playable entries; 81 Yuyu-Tei-listed utility entries are held. `apply` accepts only explicit approved entries and records their source URL. |
-| One-time translation review | Ready for reviewed input | After official PR import, 1,051 playable/upcoming D-PR prints need English evidence. 210 utility prints (including Persona Shield) are held. Translate unresolved playable names during review and retain provenance. No user search may trigger a translation. |
+| Promo identity enrichment | Review workflow complete — content review pending | Current Yuyu-Tei scope: 1,444 entries, 958 English-mapped, 371 unresolved playable, and 115 intentionally serial-only utility entries. Existing exported JSON is historical; export to a new file to obtain the current queue. `apply` accepts explicit approvals with provenance. |
+| One-time translation review | Ready for reviewed input | Current D-PR data has 545 unresolved playable/upcoming prints: 472 without an eligible exact-name candidate and 73 with conflicting names. Review only playable cards; 210 utility prints intentionally require no English mapping. No user search may trigger a translation. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
 | Finish / holo metadata | Implemented | Canonical Japanese prints and store offers retain raw finish text plus a normalised holo/standard/unknown value. A Yuyu-Tei D-PR title marked `H仕様` enriches that exact Japanese serial's local print record as holo and is displayed in search results; an explicitly conflicting retailer finish is excluded from an exact-print comparison. |
 | Rarity and finish filters | Implemented | The browser offers multi-select rarity and finish controls; Telegram and the search API accept `rarity:FFR,SEC` and `finish:holo`. The trailing-rarity shortcut remains supported. Unknown-finish printings stay visible when filtering by holo or standard. |
@@ -118,6 +126,13 @@
 
 ### Planned promo implementation sequence
 
+Current database snapshot after official PR import and main-set name enrichment:
+16,219 Japanese prints overall; 1,843 D-PR prints (707 official-name matches,
+380 Fandom-name matches, 1 explicit cross-print link, 545 unresolved playable,
+210 serial-only utility). One separate legacy CP/001 record remains; it is not
+part of the D-PR importer. All 1,736 Special Series prints across 27 sets retain
+English mappings. Database counts describe print records, not distinct card names.
+
 1. **Complete:** identical Japanese and English promo serials are no longer
    cross-region identity evidence for `D-PR` or campaign print families. Exact
    reference linking remains for release families whose regional numbering is
@@ -128,15 +143,16 @@
    unrelated English `D-PR/953EN` card.
 3. **Complete:** the official PR table establishes Japanese serial/name identity.
    The repair retains approved reviews and explicit Fandom cross-print links,
-   then uses non-promo Fandom Japanese-name matches. Generic English promo-list
+   then uses non-promo official/Fandom Japanese-name matches. Generic English promo-list
    serials are not Japanese identity evidence. Provenance is retained.
-4. **Complete:** a promo is mapped automatically only when its exact Japanese
-   name has one verified English candidate. Energy, Energy Generator, and
-   Quick Shield mappings are held pending a dedicated utility-card workflow.
+4. **Complete:** playable PRs inherit one unambiguous official/Fandom English
+   candidate through the exact Japanese name of a main-set or Special Series
+   printing. Holo finish and Japanese serial remain distinct. Utility-card
+   serial search is sufficient; English mapping is not planned for them.
 5. **Complete:** export ambiguous, missing, or conflicting Japanese names into
    a Yuyu-Tei-scoped review queue. A one-time translation is allowed only for
    explicitly approved entries; save the English name and source. Energy,
-   Energy Generator, and Quick Shield records remain on hold. Never overwrite
+   Energy Generator, and shield records remain serial-only. Never overwrite
    a reviewed mapping merely because another region reuses its serial number.
 6. Add regression tests for corrected, rejected, and ambiguous D-PR mappings,
    including a Card Rush exact-print fixture for the reported product. The

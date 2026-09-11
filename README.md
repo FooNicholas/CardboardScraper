@@ -197,9 +197,12 @@ not deleted. A later general Japanese import respects the verified PR name.
 If an official Japanese name changes, the old English mapping is cleared and
 must be resolved again. Otherwise approved review mappings and explicit
 cross-print evidence survive repair; remaining English names come from one
-unambiguous exact Japanese-name match in the non-promo Fandom data. Energy,
-Energy Generator, Quick Shield, and Persona Shield English mappings remain
-held. Yuyu-Tei still supplies retailer locations and explicit finish labels.
+unambiguous exact Japanese-name match in non-promo official/Fandom data. Main
+sets may supply official English names; Special Series use regional-safe Fandom
+evidence. Playable holo PRs inherit that English name and retain their own
+Japanese serial and finish. Energy, Energy Generator, Quick Shield, and Persona
+Shield need Japanese serial search only; English mapping is not planned for
+them. Yuyu-Tei still supplies retailer locations and explicit finish labels.
 
 `D-PR` is different: Japanese and English promo serials have separate regional
 sequences, so an equal number cannot identify the same card. After importing
@@ -212,9 +215,8 @@ scraperbot-repair-promo-mappings
 The command removes stale Japanese-facing D-PR search records, preserves the
 official English promo catalogue only as internal reference data, restores
 approved reviews and explicit Fandom cross-print links, and maps a promo to a main-set card only when its exact
-Japanese name has one unambiguous Fandom name. Energy, Energy Generator, and
-Quick Shield printings are deliberately held without English search mappings
-until their shared utility-card workflow is resumed. It never assumes an
+Japanese name has one unambiguous official/Fandom name. Utility printings remain
+searchable by Japanese serial without English-name mapping. It never assumes an
 English and Japanese D-PR serial with the same number are the same card.
 
 ### Japanese promo catalogue locations
@@ -272,8 +274,8 @@ scraperbot-promo-review apply data/dpr-promo-name-review.json
 ```
 
 Only approved records that match a stored Yuyu-Tei D-PR entry are imported.
-Energy, Energy Generator, and Quick Shield entries are pre-marked `held` and
-remain unmapped until that work resumes.
+Energy, Energy Generator, Quick Shield, and Persona Shield entries are marked
+`held` (intentionally serial-only). Their English mapping is not required.
 
 When Bushiroad later publishes an English print, the official-English importer
 always preserves that name rather than replacing it with a Fandom mapping.

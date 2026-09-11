@@ -29,10 +29,9 @@ def repair_promo_mappings(
     Only explicit Fandom cross-print links are retained. The generic English
     D-Promo list cannot identify a Japanese promo by equal serial: regional
     sequences reuse numbers for unrelated cards (for example D-PR/953).
-    Remaining promo prints can inherit one unambiguous direct Fandom English
-    name from a non-promo Japanese printing. Energy, Energy Generator, and
-    Quick Shield printings are deliberately left without English search
-    mappings while their shared utility-card workflow is on hold. English
+    Remaining promo prints can inherit one unambiguous official/Fandom English
+    name from a non-promo Japanese printing. Utility printings deliberately use
+    Japanese serial search without English-name mapping. English
     promo references are archived for internal cross-print research and are
     never Japanese identity evidence.
     """
