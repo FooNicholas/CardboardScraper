@@ -15,9 +15,11 @@ from scraperbot.connectors.clabo import CLaboConnector
 from scraperbot.connectors.avalon import AvalonConnector
 from scraperbot.connectors.amenitydream import AmenityDreamConnector
 from scraperbot.connectors.fullahead import FullAheadConnector
+from scraperbot.connectors.isei import IseiConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
 from scraperbot.connectors.net193 import Net193Connector
+from scraperbot.connectors.noah import NoahConnector
 from scraperbot.connectors.olta import OltaConnector
 from scraperbot.connectors.pao import PAOConnector
 from scraperbot.connectors.realize import RealizeConnector
@@ -58,6 +60,8 @@ def build_application(settings: Settings | None = None) -> Application:
                 PAOConnector(),
                 Net193Connector(),
                 RyuunoshippoConnector(),
+                NoahConnector(),
+                IseiConnector(),
             )
         ),
     )

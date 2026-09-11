@@ -10,7 +10,9 @@ from scraperbot.connectors.avalon import AvalonConnector
 from scraperbot.connectors.cardmax import CardMaxConnector
 from scraperbot.connectors.clabo import CLaboConnector
 from scraperbot.connectors.fullahead import FullAheadConnector
+from scraperbot.connectors.isei import IseiConnector
 from scraperbot.connectors.net193 import Net193Connector
+from scraperbot.connectors.noah import NoahConnector
 from scraperbot.connectors.pao import PAOConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
@@ -500,6 +502,29 @@ def test_ryuunoshippo_matches_exact_serial_and_reports_stock() -> None:
     offers = RyuunoshippoConnector.parse_html(CARD, html)
     assert len(offers) == 1
     assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (1280, Availability.IN_STOCK, 2)
+
+
+def test_noah_matches_exact_serial_and_reports_stock() -> None:
+    html = """
+    <li class="list_item_cell"><a href="/product/1"><span class="goods_name">DZ-BT16/FFR02 FFR エグザサベイト・ドラゴン</span>
+    <span class="figure">1,280円</span><p class="stock">在庫数 4個</p></a></li>
+    <li class="list_item_cell"><a href="/product/2"><span class="goods_name">DZ-BT16/FFR03 別のカード</span><span>100円</span></a></li>
+    """
+    offers = NoahConnector.parse_html(CARD, html)
+    assert len(offers) == 1
+    assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (1280, Availability.IN_STOCK, 4)
+
+
+def test_isei_matches_exact_serial_and_retains_sold_out_price() -> None:
+    html = """
+    <div class="card-wrapper product-card-wrapper"><a href="/products/exzabite?_pos=1">エグザサベイト・ドラゴン (DZ-BT16/FFR02)</a>
+    <span class="price-item">¥1,280</span><div class="product-stock product-stock--out">在庫：×</div><span>売り切れ</span></div>
+    <div class="card-wrapper product-card-wrapper"><a href="/products/other">別のカード (DZ-BT16/FFR03)</a><span>¥100</span></div>
+    """
+    offers = IseiConnector.parse_html(CARD, html)
+    assert len(offers) == 1
+    assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (1280, Availability.SOLD_OUT, None)
+    assert offers[0].listing_url == "https://cardshopisei.com/products/exzabite"
 
 
 def test_new_store_connectors_search_by_hyphenated_japanese_serial() -> None:

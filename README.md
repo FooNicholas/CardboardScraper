@@ -33,7 +33,7 @@ only after the user has chosen it.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush,
   VanHappy, Card Shop Olta, Manzokuya, Mana Source, FullAhead, Amenity Dream,
   Torecolo, Card Max, Cardshop Avalon, C-labo, REALiZE, PAO, 193net, and
-  Ryuunoshippo. Every connector uses a narrow Japanese-serial lookup and
+  Ryuunoshippo, TCG NOAH, and Cardshop Isei. Every connector uses a narrow Japanese-serial lookup and
   requires an exact printed reference before reporting a price.
 - Card Shop Olta preserves its per-condition SKU price and exact quantity.
   Manzokuya preserves a numeric quantity when shown (or a circle/cross stock
@@ -55,6 +55,8 @@ only after the user has chosen it.
 - PAO and 193net fetch only exact-matched product pages to retain quantity;
   PAO also prefers the current sale price. Ryuunoshippo reports its public
   result-row quantity and sold-out state.
+- TCG NOAH reports public result-row quantities. Cardshop Isei retains its
+  displayed price and in-stock/sold-out state; it does not publish a quantity.
 - A local Telegram long-polling runner. Deployment/webhook hosting is
   deliberately not included yet.
 
