@@ -177,7 +177,10 @@ class CatalogueRepository:
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(self.path)
+        # The local browser serves requests on worker threads. Access remains
+        # serialised by the web application, but SQLite must permit that one
+        # local read connection to be used by those workers.
+        self.connection = sqlite3.connect(self.path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.connection.executescript(SCHEMA)
         self._migrate_schema()

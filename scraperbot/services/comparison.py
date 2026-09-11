@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from threading import RLock
 from time import monotonic
 from typing import Iterable
 
@@ -29,10 +30,12 @@ class ComparisonService:
         self.connectors = tuple(connectors)
         self.cache_ttl_seconds = cache_ttl_seconds
         self._cache: dict[str, _CachedResult] = {}
+        self._cache_lock = RLock()
 
     async def compare(self, card: CardPrint, *, refresh: bool = False) -> ComparisonResult:
         cache_key = card.print_key
-        cached = self._cache.get(cache_key)
+        with self._cache_lock:
+            cached = self._cache.get(cache_key)
         if not refresh and cached and cached.expires_at > monotonic():
             return cached.result
 
@@ -62,7 +65,8 @@ class ComparisonService:
             unavailable_stores=tuple(unavailable),
             failed_stores=tuple(failed),
         )
-        self._cache[cache_key] = _CachedResult(monotonic() + self.cache_ttl_seconds, result)
+        with self._cache_lock:
+            self._cache[cache_key] = _CachedResult(monotonic() + self.cache_ttl_seconds, result)
         return result
 
     async def compare_family(
@@ -90,10 +94,11 @@ class ComparisonService:
         )
 
     def invalidate(self, card: CardPrint | None = None) -> None:
-        if card:
-            self._cache.pop(card.print_key, None)
-        else:
-            self._cache.clear()
+        with self._cache_lock:
+            if card:
+                self._cache.pop(card.print_key, None)
+            else:
+                self._cache.clear()
 
     @staticmethod
     def _offer_sort_key(offer: StoreOffer) -> tuple[int, int, str]:

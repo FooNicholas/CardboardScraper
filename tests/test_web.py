@@ -1,5 +1,7 @@
 import asyncio
 from pathlib import Path
+from threading import Event, Thread
+from time import monotonic
 
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.connectors.base import StoreConnector
@@ -26,6 +28,19 @@ class FixedConnector(StoreConnector):
                 stock_count=3,
             )
         ]
+
+
+class SlowConnector(StoreConnector):
+    store_id = "slow"
+    store_name = "Slow Store"
+
+    def __init__(self, started: Event) -> None:
+        self.started = started
+
+    async def search(self, _: CardPrint) -> list[StoreOffer]:
+        self.started.set()
+        await asyncio.sleep(0.4)
+        return []
 
 
 def test_local_web_search_and_comparison_share_the_catalogue(tmp_path: Path) -> None:
@@ -140,3 +155,23 @@ def test_local_web_compares_the_lowest_price_across_verified_reprints(tmp_path: 
     assert family["print_count"] == 2
     assert len(family["offers"]) == 2
     assert {offer["card"]["collector_number"] for offer in family["offers"]} == {"001", "002"}
+
+
+def test_search_is_not_blocked_by_a_slow_store_comparison(tmp_path: Path) -> None:
+    with CatalogueRepository(tmp_path / "catalogue.sqlite3") as catalogue:
+        card = catalogue.upsert(
+            CardPrint("DZ-BT16", "001", "RRR", "Example Card", japanese_name="日本語名", source="test")
+        )
+        started = Event()
+        app = LocalPriceCheckWeb(catalogue, ComparisonService([SlowConnector(started)]))
+        comparison_thread = Thread(target=lambda: asyncio.run(app.compare(card.id or 0)), daemon=True)
+        try:
+            comparison_thread.start()
+            assert started.wait(timeout=1)
+            started_at = monotonic()
+            assert app.search("example")["cards"]
+            assert monotonic() - started_at < 0.2
+            comparison_thread.join(timeout=2)
+            assert not comparison_thread.is_alive()
+        finally:
+            comparison_thread.join(timeout=2)

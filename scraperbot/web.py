@@ -5,9 +5,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+from threading import RLock
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
@@ -34,62 +35,67 @@ class LocalPriceCheckWeb:
     def __init__(self, catalogue: CatalogueRepository, comparison: ComparisonService) -> None:
         self.catalogue = catalogue
         self.comparison = comparison
+        self._catalogue_lock = RLock()
 
     def search(
         self, raw_query: str, *, rarities: tuple[str, ...] = (), finishes: tuple[str, ...] = ()
     ) -> dict[str, Any]:
-        parsed_query = parse_name_search_query(raw_query[:MAX_QUERY_LENGTH])
-        serial_card = self.catalogue.lookup_japanese_serial(raw_query[:MAX_QUERY_LENGTH])
-        if serial_card and not (parsed_query.rarities or parsed_query.finishes or rarities or finishes):
-            return {
-                "query": raw_query.strip(),
-                "rarity": None,
-                "rarities": [],
-                "finishes": [],
-                "mode": "japanese_serial",
-                "cards": [self._search_card_payload(serial_card)],
-            }
-        if not parsed_query.name:
-            raise ValueError("Enter a card name to search.")
-        selected_rarities = tuple(
-            sorted({*parsed_query.rarities, *(value.strip().upper() for value in rarities if value.strip())})
-        )
-        selected_finishes = tuple(
-            sorted(
-                {*parsed_query.finishes, *(normalise_finish(value) for value in finishes)},
-                key=lambda finish: finish.value,
+        with self._catalogue_lock:
+            parsed_query = parse_name_search_query(raw_query[:MAX_QUERY_LENGTH])
+            serial_card = self.catalogue.lookup_japanese_serial(raw_query[:MAX_QUERY_LENGTH])
+            if serial_card and not (parsed_query.rarities or parsed_query.finishes or rarities or finishes):
+                return {
+                    "query": raw_query.strip(),
+                    "rarity": None,
+                    "rarities": [],
+                    "finishes": [],
+                    "mode": "japanese_serial",
+                    "cards": [self._search_card_payload(serial_card)],
+                }
+            if not parsed_query.name:
+                raise ValueError("Enter a card name to search.")
+            selected_rarities = tuple(
+                sorted({*parsed_query.rarities, *(value.strip().upper() for value in rarities if value.strip())})
             )
-        )
-        cards = self.catalogue.search(
-            parsed_query.name,
-            rarities=selected_rarities,
-            finishes=selected_finishes,
-            limit=MAX_CHOICES,
-            japanese_only=True,
-        )
-        return {
-            "query": parsed_query.name,
-            "rarity": selected_rarities[0] if len(selected_rarities) == 1 else None,
-            "rarities": list(selected_rarities),
-            "finishes": [finish.value for finish in selected_finishes],
-            "mode": "name",
-            "cards": [self._search_card_payload(card) for card in cards],
-        }
+            selected_finishes = tuple(
+                sorted(
+                    {*parsed_query.finishes, *(normalise_finish(value) for value in finishes)},
+                    key=lambda finish: finish.value,
+                )
+            )
+            cards = self.catalogue.search(
+                parsed_query.name,
+                rarities=selected_rarities,
+                finishes=selected_finishes,
+                limit=MAX_CHOICES,
+                japanese_only=True,
+            )
+            return {
+                "query": parsed_query.name,
+                "rarity": selected_rarities[0] if len(selected_rarities) == 1 else None,
+                "rarities": list(selected_rarities),
+                "finishes": [finish.value for finish in selected_finishes],
+                "mode": "name",
+                "cards": [self._search_card_payload(card) for card in cards],
+            }
 
     async def compare(self, print_id: int, *, refresh: bool = False) -> dict[str, Any]:
-        card = self.catalogue.get_user_selection(print_id)
+        with self._catalogue_lock:
+            card = self.catalogue.get_user_selection(print_id)
         if not card:
             raise LookupError("That Japanese-market card print is no longer available for comparison.")
         result = await self.comparison.compare(card, refresh=refresh)
         payload = self._comparison_payload(result)
-        payload["family_print_count"] = len(self.catalogue.verified_reprint_family(card))
+        with self._catalogue_lock:
+            payload["family_print_count"] = len(self.catalogue.verified_reprint_family(card))
         return payload
 
     async def compare_family(self, print_id: int, *, refresh: bool = False) -> dict[str, Any]:
-        card = self.catalogue.get_user_selection(print_id)
+        with self._catalogue_lock:
+            card = self.catalogue.get_user_selection(print_id)
+            family = self.catalogue.verified_reprint_family(card) if card else ()
         if not card:
             raise LookupError("That Japanese-market card print is no longer available for comparison.")
-        family = self.catalogue.verified_reprint_family(card)
         return self._family_comparison_payload(
             await self.comparison.compare_family(card, family, refresh=refresh)
         )
@@ -274,7 +280,7 @@ def build_web_application(settings: Settings | None = None) -> LocalPriceCheckWe
 def serve(application: LocalPriceCheckWeb, *, host: str = "127.0.0.1", port: int = 8787) -> None:
     """Serve the UI locally. The default address is inaccessible from a network."""
     handler = type("BoundLocalWebRequestHandler", (LocalWebRequestHandler,), {"application": application})
-    server = HTTPServer((host, port), handler)
+    server = ThreadingHTTPServer((host, port), handler)
     print(f"JP Price Checker is running at http://{host}:{port}")
     try:
         server.serve_forever()

@@ -85,6 +85,7 @@
 | Stage | Status | Outcome |
 | --- | --- | --- |
 | Core catalogue and comparison | Complete | English fuzzy search, Japanese-print selection, local browser and Telegram interfaces, and exact-print comparisons from Yuyu-Tei, BigWeb, Card Rush, and VanHappy. |
+| Responsive local search during price checks | Implemented | The local browser now serves searches independently of an in-progress store comparison. A slow retailer response can delay that comparison, but it cannot make a new local catalogue search wait behind it. |
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
 | Promo mapping audit and correction | Implemented for current D-PR data | Equal-serial official promo links are blocked and archived as internal English references. The local D-PR repair cleared 1,694 prior search records, archived 1,103 English references, and restored direct Fandom and exact Japanese-name matches. Energy, Energy Generator, and Quick Shield mappings are explicitly on hold. `D-PR/953` → Leuhan is covered by regression tests. |
 | Special Series regional mapping audit | Complete | All imported D/DZ Special Series codes are region-specific like D-PR/CP. The repair rebuilt 1,736 Japanese prints across 27 D-SS/DZ-SS sets from their Fandom Japanese-set pages, with no remaining equal-serial official-English mappings. `DZ-SS10/018` now resolves to Caper Companion, never Vital Blaze Blast. |
