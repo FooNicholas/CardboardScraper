@@ -323,10 +323,11 @@ replaced by this unresolved-name review command.
 Energy, Energy Generator, Quick Shield, and Persona Shield entries are marked
 `held` (intentionally serial-only). Their English mapping is not required.
 
-The local `data/dpr-promo-name-review-2026-09-12-v5.json` snapshot contains
-291 entries: 168 playable prints without eligible evidence, 8 with conflicting
+The local `data/dpr-promo-name-review-2026-09-12-v7.json` snapshot contains
+286 entries: 168 playable prints without eligible evidence, 3 with conflicting
 candidates, and 115 serial-only utility prints. It is an unapproved review
-artifact, not a new mapping import; prior review files are preserved.
+artifact, not a new mapping import; prior review files are preserved. The
+version-6 review artifact records the five user-approved name resolutions.
 
 When Bushiroad later publishes an English print, its serial and name remain in
 the reference archive. They do not modify Japanese-card equality or search
