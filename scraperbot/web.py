@@ -352,9 +352,9 @@ INDEX_HTML = """<!doctype html>
     h1 { margin:0; font-family:ui-serif,Georgia,Cambria,"Times New Roman",serif; font-size:clamp(1.45rem,3vw,2rem); font-weight:600; letter-spacing:-.04em; line-height:1.1; }
     .eyebrow { color:var(--accent); font-weight:750; letter-spacing:.12em; font-size:.74rem; text-transform:uppercase; margin-bottom:13px; }
     .intro { max-width:630px; color:var(--muted); margin:18px 0 34px; }
-    .workspace { display:grid; grid-template-columns:minmax(290px,.8fr) minmax(0,1.4fr); gap:40px; align-items:start; margin-top:22px; }
-    .print-panel,.price-panel { min-width:0; }
-    .price-panel { position:sticky; top:26px; min-height:180px; }
+    .workspace { --pane-height:calc(100vh - 250px); display:grid; grid-template-columns:minmax(290px,.8fr) minmax(0,1.4fr); gap:40px; align-items:start; margin-top:22px; }
+    .print-panel,.price-panel { min-width:0; min-height:0; height:max(260px,var(--pane-height)); display:flex; flex-direction:column; }
+    .price-panel { position:sticky; top:26px; }
     .panel-label { color:var(--muted); font-size:.74rem; font-weight:750; letter-spacing:.11em; text-transform:uppercase; margin:0 0 10px; }
     form { display:flex; gap:10px; background:var(--surface); border:1px solid var(--line); padding:8px; border-radius:15px; box-shadow:0 12px 32px #5e433a12; }
     input { min-width:0; flex:1; border:0; border-radius:10px; color:var(--ink); background:transparent; padding:14px 15px; font:inherit; outline:none; }
@@ -376,7 +376,7 @@ INDEX_HTML = """<!doctype html>
     .filter-clear { color:var(--muted); background:transparent; border-color:transparent; padding:5px 2px; font-size:.8rem; text-decoration:underline; }
     .filter-clear:hover { color:var(--accent-hover); background:transparent; }
     .aggregate-button { margin-left:auto; white-space:nowrap; }
-    .result-list { display:grid; gap:10px; }
+    .result-list { min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; display:grid; align-content:start; gap:10px; padding-right:5px; }
     .card { width:100%; text-align:left; color:var(--ink); background:var(--surface); border:1px solid var(--line); padding:17px; border-radius:13px; display:flex; gap:16px; align-items:center; box-shadow:0 2px 5px #5e433a08; }
     .card:hover { border-color:#df8f64; background:#fffaf5; }
     .card.active { border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 2px #e8a47f55; }
@@ -384,7 +384,7 @@ INDEX_HTML = """<!doctype html>
     .card h2 { font-size:1.05rem; margin:0 0 4px; }
     .card p { margin:0; color:var(--muted); font-size:.9rem; }
     .card .code { margin-left:auto; text-align:right; color:var(--accent); font-size:.84rem; white-space:nowrap; }
-    #comparison { margin-top:28px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px; box-shadow:0 2px 5px #5e433a08; }
+    #comparison { min-height:0; flex:1; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; margin-top:0; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px; box-shadow:0 2px 5px #5e433a08; }
     #comparison:empty { display:none; }
     .comparison-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:3px; }
     .comparison-head h2 { margin:0; font-size:1.35rem; }
@@ -401,7 +401,7 @@ INDEX_HTML = """<!doctype html>
     .sold { color:var(--muted); }
     .tag { color:var(--muted); font-size:.75rem; text-align:right; }
     .notice { color:var(--muted); font-size:.9rem; margin:12px 0; }
-    @media (max-width:780px) { main { padding-top:44px; } .workspace { grid-template-columns:1fr; gap:24px; } .price-panel { position:static; } form { padding:7px; } button { padding:11px 13px; } .card { align-items:flex-start; } .card .code { white-space:normal; } #comparison { margin-top:18px; } .offer { grid-template-columns:1fr auto; } .tag { grid-column:1 / -1; text-align:left; } }
+    @media (max-width:780px) { main { padding-top:44px; } .workspace { grid-template-columns:1fr; gap:24px; } .print-panel,.price-panel { height:auto; } .price-panel { position:static; } .result-list,#comparison { overflow:visible; scrollbar-gutter:auto; padding-right:0; } form { padding:7px; } button { padding:11px 13px; } .card { align-items:flex-start; } .card .code { white-space:normal; } #comparison { flex:none; margin-top:0; } .offer { grid-template-columns:1fr auto; } .tag { grid-column:1 / -1; text-align:left; } }
   </style>
 </head>
 <body><main>

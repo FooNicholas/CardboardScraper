@@ -187,3 +187,10 @@ def test_browser_ui_separates_print_aggregation_from_selected_print_sorting() ->
     assert "☰↓" in INDEX_HTML
     assert "renderCurrentComparison" in INDEX_HTML
     assert "Activate to sort" in INDEX_HTML
+
+
+def test_browser_ui_gives_each_desktop_panel_an_independent_scroll_container() -> None:
+    assert "--pane-height:calc(100vh - 250px)" in INDEX_HTML
+    assert ".result-list { min-height:0; overflow-y:auto; overscroll-behavior:contain;" in INDEX_HTML
+    assert "#comparison { min-height:0; flex:1; overflow-y:auto; overscroll-behavior:contain;" in INDEX_HTML
+    assert ".result-list,#comparison { overflow:visible;" in INDEX_HTML
