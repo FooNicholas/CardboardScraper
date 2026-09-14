@@ -31,10 +31,13 @@ only after the user has chosen it.
 - An importable official English catalogue, including lazy-loaded result pages,
   retained as reference-only data for a future reviewed cross-region feature.
 - Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush,
-  VanHappy, Card Shop Olta, Manzokuya, Mana Source, FullAhead, Amenity Dream,
+  VanHappy, Card Shop Olta, Manzokuya, Mana Source, TCG Advantage, Gamers, Toreca Plaza 55, Pachipachi TCG, Square Bushiroad, Masters Guild, FullAhead, Amenity Dream,
   Torecolo, Card Max, Cardshop Avalon, C-labo, REALiZE, PAO, 193net, and
-  Ryuunoshippo, TCG NOAH, and Cardshop Isei. Every connector uses a narrow Japanese-serial lookup and
-  requires an exact printed reference before reporting a price.
+  Ryuunoshippo, TCG NOAH, Cardshop Isei, and G-Project TCG. G-Project does
+  not publish a printed serial: it performs one exact Japanese-name search and
+  accepts an offer only after its public product page confirms the matching
+  Japanese set and rarity category. Its offers are labelled accordingly; every
+  other connector uses a narrow Japanese-serial lookup and exact reference.
 - Card Shop Olta preserves its per-condition SKU price and exact quantity.
   Manzokuya preserves a numeric quantity when shown (or a circle/cross stock
   state), and Mana Source preserves its listed quantity or sold-out state.
@@ -334,11 +337,12 @@ replaced by this unresolved-name review command.
 Energy, Energy Generator, Quick Shield, and Persona Shield entries are marked
 `held` (intentionally serial-only). Their English mapping is not required.
 
-The local `data/dpr-promo-name-review-2026-09-12-v7.json` snapshot contains
-286 entries: 168 playable prints without eligible evidence, 3 with conflicting
-candidates, and 115 serial-only utility prints. It is an unapproved review
-artifact, not a new mapping import; prior review files are preserved. The
-version-6 review artifact records the five user-approved name resolutions.
+The local `data/dpr-promo-name-review-2026-09-14-v15.json` snapshot contains
+179 entries: 64 playable prints deferred for lack of direct evidence and 115
+serial-only utility prints. Deferred playable cards remain searchable by their
+formatted Japanese serial for exact comparison; they are not translated or
+guessed. Prior review files are preserved, including the exact Fandom-evidence
+and user-conflict-resolution artifacts that produced the approved mappings.
 
 When Bushiroad later publishes an English print, its serial and name remain in
 the reference archive. They do not modify Japanese-card equality or search

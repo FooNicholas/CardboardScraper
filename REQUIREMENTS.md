@@ -89,7 +89,11 @@
 ## Store comparison
 
 - Every store connector receives the selected canonical print and verifies an
-  exact printed reference in its result before reporting a price.
+  exact printed reference in its result before reporting a price. The sole
+  documented exception is G-Project TCG: its public pages omit serials, so it
+  requires exact Japanese name plus the matching published Japanese set and
+  rarity category, and reports `exact_japanese_name` confidence rather than
+  claiming a serial-verified match.
 - Preserve displayed price, availability, stock count when listed, condition,
   and the retailer product link.
 - Retailer catalogue pages can seed Japanese names and serials, but are not the
@@ -128,7 +132,7 @@
 
 | Stage | Status | Outcome |
 | --- | --- | --- |
-| Core catalogue and comparison | Complete | English fuzzy search, Japanese-print selection, local browser and Telegram interfaces, and exact-print comparisons from Yuyu-Tei, BigWeb, Card Rush, VanHappy, Card Shop Olta, Manzokuya, Mana Source, FullAhead, Amenity Dream, Torecolo, Card Max, Cardshop Avalon, C-labo, REALiZE, PAO, 193net, Ryuunoshippo, TCG NOAH, and Cardshop Isei. |
+| Core catalogue and comparison | Complete | English fuzzy search, Japanese-print selection, local browser and Telegram interfaces, and selected-print comparisons from Yuyu-Tei, BigWeb, Card Rush, VanHappy, Card Shop Olta, Manzokuya, Mana Source, TCG Advantage, Gamers, Toreca Plaza 55, Pachipachi TCG, Square Bushiroad, Masters Guild, FullAhead, Amenity Dream, Torecolo, Card Max, Cardshop Avalon, C-labo, REALiZE, PAO, 193net, Ryuunoshippo, TCG NOAH, Cardshop Isei, and G-Project TCG. |
 | Shared Japanese card identity | Implemented | English names/aliases belong to a canonical Japanese card identity, and physical Japanese prints link below it only when their exact Japanese name matches. Main, D-PR and Special Series prints can return together and be filtered by rarity/finish. English serials are reference-only and cannot affect this grouping. |
 | Responsive local search during price checks | Implemented | The local browser now serves searches independently of an in-progress store comparison. A slow retailer response can delay that comparison, but it cannot make a new local catalogue search wait behind it. |
 | Cross-print links | Complete | A Fandom card page can link an English reprint to a Japanese printing with a different serial; `DZ-BT12/Re07EN` → `D-PR/1247` is the verified example. |
@@ -138,9 +142,9 @@
 | D-era P/V mapping scope | Complete | Automatic Fandom refresh includes the D-era `D-PS`, `D-PV`, and `D-VS` product families because some cards remain current-format playable. They use the same exact-Japanese-name identity rule as every other supported Japanese print. |
 | Promo catalogue ingestion | Complete for current Yuyu-Tei scan | `scraperbot-import-yuyutei-promos --all` discovered every current numeric D-Promo group and stored 1,444 exact D-PR entries (numeric serials `1–1757`) from actual Yuyu-Tei listings. It preserves page slug, Japanese name, listing URL, and retailer product ID without creating an English mapping. Empty range groups remain eligible for later refresh. |
 | Japanese-section D-Promo name deconfliction | Implemented and applied | The Fandom parser now reads only the page's labelled Japanese D-Promo section and stops before its English section, so `D-PR/061` resolves to Flinty Slasher rather than the unrelated `D-PR/061EN` card. A local rebuild applied 731 direct Japanese-list mappings and explicit reviewed resolutions for D-PR/736, /753, /754, /755, and /1123, reducing all playable D-PR records awaiting review from 494 to 265 and increasing English-searchable Japanese prints from 15,300 to 15,594. |
-| Promo identity enrichment | Review workflow complete — content review pending | Current Yuyu-Tei scope: 1,444 entries, 1,158 English-mapped, 171 unresolved playable, and 115 intentionally serial-only utility entries. `data/dpr-promo-name-review-2026-09-12-v7.json` is the fresh unapproved queue; `apply` accepts explicit approvals with provenance. |
-| One-time translation review | Ready for reviewed input | Current D-PR data has 265 unresolved playable/upcoming prints. In the current 1,444-entry Yuyu-Tei scope, 168 have no eligible evidence and 3 have conflicting candidates; the remaining unresolved official PR entries are not in the current retailer scope. Review only playable cards; 210 utility prints intentionally require no English mapping. No user search may trigger a translation. |
-| Evidence-backed review and stale-approval protection | Implemented | Version-2 review exports use canonical/official Japanese identity, separate retailer titles, and Fandom-backed exact-name candidate evidence. Export preserves existing files; apply rejects stale/duplicate/invalid approvals and resolved targets with reasons. The fresh local Yuyu-Tei queue has 168 no-candidate playable prints, 3 conflicting-candidate playable prints, and 115 intentionally serial-only utility prints. Five explicit user approvals are saved in the version-6 review artifact. |
+| Promo identity enrichment | Complete for the current review scope | Of 1,444 Yuyu-Tei D-Promo entries, 1,265 have an English mapping. The remaining 64 playable entries are intentionally deferred and remain searchable by formatted Japanese serial only; 115 utility entries are also serial-only. Exact Fandom title-and-reference evidence and the three user-selected conflict resolutions are retained in the reviewed artifacts. |
+| One-time translation review | Complete — no translation required | Every playable promo with exact Fandom Japanese-title and Japanese D-PR evidence was resolved. The remaining 64 cards have no such evidence and are deliberately left unmapped rather than translated or guessed; serial search remains available. |
+| Evidence-backed review and stale-approval protection | Implemented and applied | Version-2 review exports use canonical/official Japanese identity, separate retailer titles, and Fandom-backed exact-name candidate evidence. Export preserves existing files; apply rejects stale/duplicate/invalid approvals and resolved targets with reasons. `data/dpr-promo-name-review-2026-09-14-v15.json` is the current queue: 64 deferred playable entries and 115 intentionally serial-only utility entries. |
 | Serial-number search | Implemented | Browser and Telegram accept formatted Japanese serials such as `D-PR/953`, `DPR953`, and `D-PR 953`. A serial can select an unmapped Japanese print for exact comparison without creating an English mapping. Bare numbers are rejected; English serials remain internal only. |
 | Finish / holo metadata | Implemented | Canonical Japanese prints and store offers retain raw finish text plus a normalised holo/standard/unknown value. A Yuyu-Tei D-PR title marked `H仕様` enriches that exact Japanese serial's local print record as holo and is displayed in search results; an explicitly conflicting retailer finish is excluded from an exact-print comparison. |
 | Rarity and finish filters | Implemented | The browser offers multi-select rarity and finish controls; Telegram and the search API accept `rarity:FFR,SEC` and `finish:holo`. The trailing-rarity shortcut remains supported. Unknown-finish printings stay visible when filtering by holo or standard. |
@@ -153,7 +157,14 @@
 | Card Max, Cardshop Avalon, C-labo, and REALiZE | Implemented | Every connector sends one public formatted Japanese-serial lookup and rejects every result whose printed reference differs. Card Max, Cardshop Avalon, and REALiZE then read only exact-matched product pages to retain their numeric quantity; C-labo keeps its explicit result-row stock label and sold-out price. |
 | PAO, 193net, and Ryuunoshippo | Implemented | Every connector uses one public formatted Japanese-serial query and validates the printed reference before reporting an offer. PAO preserves a current sale price and reads the exact product's numeric quantity; 193net permits its explicit rarity suffix after an otherwise exact serial and reads the exact product's numeric quantity; Ryuunoshippo retains its public result-row quantity and sold-out state. |
 | TCG NOAH and Cardshop Isei | Implemented | Each connector performs one public formatted Japanese-serial search and rejects printed-reference mismatches. TCG NOAH retains its result-row numeric quantity. Cardshop Isei retains its public price and in-stock/sold-out signal; its storefront does not publish a numeric quantity. |
-| Candidate store connectors | Planned — discovery and permission review | Add only after confirming a permitted, narrow exact-Japanese-serial lookup and the store's price/stock fields. Backlog: ゲーマーズ, Square Bushiroad, Hobby Station, Advantage TCG, Card Museum, Toreca Plaza, Masters Guild, G Project TCG, and Pachipachi TCG. Each connector must validate the printed serial and explicit finish before an offer can be displayed. |
+| TCG Advantage | Implemented | The connector turns the selected Japanese print into Advantage's public Vanguard inventory code (`VG` + set code + hyphen + collector number), performs one exact lookup, validates the returned code after the `VG` game prefix, and retains public price and numeric stock. |
+| Gamers | Implemented | The connector uses Gamers' public Vanguard filter with one formatted Japanese serial. It validates the printed serial and explicit finish, then retains public result-row price and numeric stock, including a displayed sold-out price. |
+| Toreca Plaza 55 | Implemented | The connector uses one public serial search within the Vanguard-singles category and fetches only its exact matched product page. It revalidates the printed serial and explicit finish against the product's public structured data, then retains the displayed price and numeric stock. |
+| Pachipachi TCG | Implemented | The connector uses one public Shopify product-only search with the formatted Japanese serial. It rejects serial and explicit-finish mismatches, then retains the result-row price and numeric stock. |
+| Square Bushiroad | Implemented | The connector uses one public Japanese-serial query. It validates the serial before Square's displayed rarity suffix and any explicit finish, then retains the result-row price and numeric stock. |
+| Masters Guild | Implemented | The connector uses one public formatted Japanese-serial search, then fetches only exact matched products. It revalidates the serial and explicit finish against each product's public structured data, and retains the tax-inclusive price and numeric stock. |
+| G-Project TCG | Implemented with documented non-serial confidence | The connector makes one public Japanese-name search inside G-Project's Vanguard category and fetches only exact-name candidates (maximum eight). It accepts a price only when the product page's Japanese name, set category, and rarity category match the selected Japanese print. G-Project does not publish a printed serial or stock quantity, so offers are labelled `exact_japanese_name`, retain price and in-stock/sold-out state, and report no quantity. |
+| Candidate store connectors | Planned — discovery and permission review | Add only after confirming a permitted, narrow exact-Japanese-serial lookup and the store's price/stock fields. Backlog: Hobby Station and Card Museum. Hobby Station currently serves a browser-verification interstitial to the public search; Card Museum currently exposes name/category results but no serial-verifiable route. Each connector must validate the printed serial and explicit finish before an offer can be displayed. |
 | Cloudflare-protected stores | On hold | Do not bypass protection or evade detection. Add a connector only after the store supplies a permitted API, data export, partner access, or explicit allowlisting for this app. |
 | Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
 | Dorasuta | On hold | Do not add the Dorasuta connector at this time. Reassess only if a permitted, narrow exact-serial integration path is available; no detection bypass. |
@@ -161,11 +172,12 @@
 ### Planned promo implementation sequence
 
 Current database snapshot after archiving English-number equality claims:
-16,219 Japanese prints overall; 7,299 canonical Japanese-name identities link
-15,594 physical printings. The 11,079 former English-number mapping claims are
+16,219 Japanese prints overall; 7,363 canonical Japanese-name identities link
+15,720 physical printings. The 11,079 former English-number mapping claims are
 in the local archive, alongside retained English serial/name reference data.
-1,844 promo prints include 265 playable records awaiting Fandom-backed or
-reviewed English names; 210 utility prints remain intentionally serial-only.
+The current Yuyu-Tei D-Promo review scope has 64 deferred playable records
+that remain Japanese-serial-searchable and 115 utility records that are
+intentionally serial-only.
 Of 1,736 Special Series prints across 27 sets, only 44 remain unmapped because
 exact Japanese-name Fandom evidence links the rest. Counts describe print
 records, not distinct card names.
@@ -196,10 +208,9 @@ records, not distinct card names.
    to a shared canonical Japanese card identity, so every exact-name Japanese
    printing is returned by one English search; the association never uses an
    English serial.
-6. Add regression tests for corrected, rejected, and ambiguous D-PR mappings,
-   including a Card Rush exact-print fixture for the reported product. The
-   audit must pass before any bulk promo import writes user-searchable English
-   names.
+6. **Complete:** regression coverage verifies approved, rejected, stale, and
+   ambiguous D-PR review handling. The review and Japanese-serial-search tests
+   pass after the final scoped mapping import.
 7. **Complete:** `promo_catalogue_entries` is a local import store keyed by
    Japanese serial. It saves the Yuyu-Tei page, product URL, product ID, and
    Japanese name separately from canonical card identity so later retailers
@@ -211,14 +222,14 @@ records, not distinct card names.
    D-Promo page groups, recording only pages that currently contain exact
    listings. The current Yuyu-Tei scan found 1,444 entries through numeric
    serial `1757`; it never assumes a range label means every serial exists.
-9. **Ready for content review:** official PR-table identities are imported
-   before English mapping. Remaining playable names still need explicit
-   cross-print evidence or reviewed, one-time translation. The Fandom reader
-   now uses only its labelled Japanese D-Promo section, never its English
-   regional sequence. The fresh `data/dpr-promo-name-review-2026-09-12-v7.json`
-   queue contains 171 unresolved playable retailer entries (168 no eligible
-   candidate, 3 conflicts) and 115 intentionally serial-only utility entries.
-   Five user-approved resolutions are retained in version 6.
+9. **Complete for the current review scope:** official PR-table identities are
+   imported before English mapping. Exact Fandom individual-card pages resolved
+   every reviewable Japanese-title/D-PR-reference match, and the three
+   conflicting candidates were explicitly selected. The remaining 64 playable
+   entries have no direct evidence, so they are intentionally deferred and
+   searchable by Japanese serial only; the 115 utility entries remain
+   intentionally serial-only. `data/dpr-promo-name-review-2026-09-14-v15.json`
+   is the current queue.
 10. **Complete:** Japanese serial normalisation and exact lookup work in the
    catalogue search API, Telegram handler, and browser UI. Formatted serials
    resolve directly; bare numbers are rejected as ambiguous. An unmapped
@@ -266,5 +277,7 @@ records, not distinct card names.
 
 - No accessory catalogue or accessory search.
 - No per-search translation.
-- No loose retailer-name matching in place of an exact serial match.
+- No loose retailer-name matching in place of an exact serial match. G-Project
+  is the only documented exception: its public pages have no serial, and it
+  must pass exact Japanese-name, set-category, and rarity-category checks.
 - No hosting work unless separately requested.
