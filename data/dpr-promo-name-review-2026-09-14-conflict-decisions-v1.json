@@ -1,0 +1,9 @@
+{
+  "schema_version": 2,
+  "scope": "User-approved decisions for conflicting exact-Japanese-name candidates",
+  "entries": [
+    {"set_code":"DPR","collector_number":"1147","japanese_name":"妖獣 スネゴスリ","japanese_source_url":"https://cf-vanguard.com/cardlist/?cardno=D-PR/1147","status":"approved","english_name":"Rogue Beast, Sunegosuri","aliases":[],"source_url":"https://cardfight.fandom.com/wiki/DZ_Quick_Start_Deck_01:_Dragon_Empire"},
+    {"set_code":"DPR","collector_number":"1240","japanese_name":"夜影兵","japanese_source_url":"https://cf-vanguard.com/cardlist/?cardno=D-PR/1240","status":"approved","english_name":"Shadow Army Token","aliases":[],"source_url":"https://cardfight.fandom.com/wiki/D_Special_Series_08:_Stand_Up_Deckset_%22Orfist%22"},
+    {"set_code":"DPR","collector_number":"1253","japanese_name":"強撃竜 スピノアサルター","japanese_source_url":"https://cf-vanguard.com/cardlist/?cardno=D-PR/1253","status":"approved","english_name":"Crushing Dragon, Spinoassaulter","aliases":[],"source_url":"https://cardfight.fandom.com/wiki/DZ_Booster_Set_01:_Fated_Clash"}
+  ]
+}
