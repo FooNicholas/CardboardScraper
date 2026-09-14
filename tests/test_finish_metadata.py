@@ -10,6 +10,8 @@ from scraperbot.models import (
     Finish,
     JapaneseCardPrint,
     PromoCatalogueEntry,
+    finish_from_text,
+    split_finish_annotation,
 )
 
 
@@ -25,6 +27,14 @@ def test_official_japanese_source_splits_a_holo_suffix_from_the_card_name() -> N
     assert cards[0].japanese_name == "焔の巫女 シンディ"
     assert cards[0].finish is Finish.HOLO
     assert cards[0].finish_raw == "H仕様"
+
+
+def test_store_holo_annotation_is_retained_as_holo_finish() -> None:
+    name, finish, raw_finish = split_finish_annotation("カード名(ホロ)")
+    detected_finish, detected_raw_finish = finish_from_text("カード名(ホロ)")
+
+    assert (name, finish, raw_finish) == ("カード名", Finish.HOLO, "ホロ")
+    assert (detected_finish, detected_raw_finish) == (Finish.HOLO, "ホロ")
 
 
 def test_finish_is_saved_on_a_mapped_japanese_print(tmp_path: Path) -> None:

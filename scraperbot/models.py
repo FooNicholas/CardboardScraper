@@ -54,11 +54,11 @@ def normalise_finish(value: Finish | str | None) -> Finish:
 
 
 _FINISH_SUFFIX = re.compile(
-    r"\s*[（(]\s*(?P<annotation>[HＨ]\s*仕様|ホロ仕様|箔押し|ノーマル仕様|通常仕様)\s*[）)]\s*$",
+    r"\s*[（(]\s*(?P<annotation>[HＨ]\s*仕様|ホロ仕様|ホロ|箔押し|ノーマル仕様|通常仕様)\s*[）)]\s*$",
     re.IGNORECASE,
 )
 _FINISH_ANNOTATION = re.compile(
-    r"(?P<annotation>[HＨ]\s*仕様|ホロ仕様|箔押し|ノーマル仕様|通常仕様)",
+    r"(?P<annotation>[HＨ]\s*仕様|ホロ仕様|ホロ|箔押し|ノーマル仕様|通常仕様)",
     re.IGNORECASE,
 )
 
