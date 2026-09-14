@@ -4,25 +4,32 @@ import json
 import httpx
 
 from scraperbot.connectors.bigweb import BigWebConnector
+from scraperbot.connectors.advantage import AdvantageConnector
 from scraperbot.connectors.cardrush import CardRushConnector
 from scraperbot.connectors.amenitydream import AmenityDreamConnector
 from scraperbot.connectors.avalon import AvalonConnector
 from scraperbot.connectors.cardmax import CardMaxConnector
 from scraperbot.connectors.clabo import CLaboConnector
 from scraperbot.connectors.fullahead import FullAheadConnector
+from scraperbot.connectors.gamers import GamersConnector
+from scraperbot.connectors.gproject import GProjectConnector
 from scraperbot.connectors.isei import IseiConnector
 from scraperbot.connectors.net193 import Net193Connector
 from scraperbot.connectors.noah import NoahConnector
 from scraperbot.connectors.pao import PAOConnector
+from scraperbot.connectors.pachipachi import PachipachiConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
+from scraperbot.connectors.mastersguild import MastersGuildConnector
 from scraperbot.connectors.olta import OltaConnector
 from scraperbot.connectors.torecolo import TorecoloConnector
+from scraperbot.connectors.torecaplaza import TorecaPlazaConnector
 from scraperbot.connectors.realize import RealizeConnector
 from scraperbot.connectors.ryuunoshippo import RyuunoshippoConnector
+from scraperbot.connectors.squarebushiroad import SquareBushiroadConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
-from scraperbot.models import Availability, CardPrint
+from scraperbot.models import Availability, CardPrint, MatchConfidence, StoreOffer
 
 
 CARD = CardPrint(
@@ -525,6 +532,304 @@ def test_isei_matches_exact_serial_and_retains_sold_out_price() -> None:
     assert len(offers) == 1
     assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (1280, Availability.SOLD_OUT, None)
     assert offers[0].listing_url == "https://cardshopisei.com/products/exzabite"
+
+
+def test_advantage_uses_its_exact_product_code_and_reports_stock() -> None:
+    html = """
+    <table class="list_item_table"><tr>
+      <td><h2><a href="/product/1">エグザサベイト・ドラゴン<wbr><span class="model_number">[VGDZBT16-FFR02]</span></a></h2>
+      <span class="pricech">1,480円</span><span>[在庫数 3点]</span></td>
+      <td><h2><a href="/product/2">別のカード<wbr><span class="model_number">[VGDZBT16-FFR03]</span></a></h2>
+      <span class="pricech">100円</span><span>[在庫数 1点]</span></td>
+      <td><h2><a href="/product/3">エグザサベイト・ドラゴン<wbr><span class="model_number">[VGDZBT16-FFR02]</span></a></h2>
+      <span class="pricech">980円</span><span>[在庫数 0点]</span><span>売り切れ</span></td>
+    </tr></table>
+    """
+    offers = AdvantageConnector.parse_html(CARD, html)
+    assert [(offer.price_yen, offer.availability, offer.stock_count) for offer in offers] == [
+        (1480, Availability.IN_STOCK, 3),
+        (980, Availability.SOLD_OUT, 0),
+    ]
+    assert offers[0].listing_url == "https://www.advantagetcg.jp/product/1"
+    assert AdvantageConnector.product_code(CARD) == "VGDZBT16-FFR02"
+
+
+def test_advantage_searches_only_its_exact_japanese_product_code() -> None:
+    requested_keywords: list[str | None] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested_keywords.append(request.url.params.get("keyword"))
+        return httpx.Response(200, text="")
+
+    async def run() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await AdvantageConnector(client).search(CARD)
+
+    asyncio.run(run())
+    assert requested_keywords == ["VGDZBT16-FFR02"]
+
+
+def test_gamers_matches_exact_serial_and_reports_stock() -> None:
+    card = CardPrint(
+        set_code="DZ-SS16",
+        collector_number="040",
+        rarity="RR",
+        english_name="Optimizing Mechanic",
+        japanese_name="オプティマイジング・メカニック",
+        source="test",
+    )
+    html = """
+    <ul><li class="list_product"><a href="/pn/example/pd/1/"><h3 class="item_list_ttl">【VG】オプティマイジング・メカニック【RR】DZ-SS16/040『ブラントゲート』</h3>
+    <p class="price">50円(税込)</p><p class="sell">在庫：<span>8</span></p></a></li>
+    <li class="list_product"><a href="/pn/other/pd/2/"><h3 class="item_list_ttl">【VG】別のカード【RR】DZ-SS16/041</h3>
+    <p class="price">100円(税込)</p><p class="sell">在庫：1</p></a></li>
+    <li class="list_product"><a href="/pn/oos/pd/3/"><h3 class="item_list_ttl">【VG】オプティマイジング・メカニック【RR】DZ-SS16/040</h3>
+    <p class="price">40円(税込)</p><p>SOLDOUT 在庫：0</p></a></li></ul>
+    """
+    offers = GamersConnector.parse_html(card, html)
+    assert [(offer.price_yen, offer.availability, offer.stock_count) for offer in offers] == [
+        (50, Availability.IN_STOCK, 8),
+        (40, Availability.SOLD_OUT, 0),
+    ]
+    assert offers[0].listing_url == "https://www.gamers.co.jp/pn/example/pd/1/"
+
+
+def test_gamers_searches_only_the_exact_japanese_serial() -> None:
+    requested_params: list[dict[str, str]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested_params.append(dict(request.url.params))
+        return httpx.Response(200, text="")
+
+    async def run() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await GamersConnector(client).search(CARD)
+
+    asyncio.run(run())
+    assert requested_params == [{"tti": "4", "ss": "1", "sl": "80", "k": "DZ-BT16/FFR02"}]
+
+
+def test_gproject_revalidates_exact_japanese_name_set_and_rarity_category() -> None:
+    search_html = """
+    <ul>
+      <li class="ec-shelfGrid__item"><a href="/products/detail/1"><p class="ec-shelfGrid__item-image"><img></p><p>ユースベルク“龍吼燎騎・幻影”</p><p class="price02-default">￥330</p></a></li>
+      <li class="ec-shelfGrid__item"><a href="/products/detail/2"><p>ユースベルク“龍吼燎騎・幻影”</p><p class="price02-default">￥5,000</p></a></li>
+      <li class="ec-shelfGrid__item"><a href="/products/detail/3"><p>別のカード</p><p class="price02-default">￥100</p></a></li>
+    </ul>
+    """
+    product_html = """
+    <section class="ec-productRole">
+      <h1 class="ec-productRole__title">ユースベルク“龍吼燎騎・幻影”</h1>
+      <p class="ec-price__price">￥330</p>
+      <ul class="ec-productRole__category"><li><a>【DZ-BT14】赫月ノ使者</a></li><li><a>RRR・RR</a></li></ul>
+      <div class="ec-productRole__btn"><button>カートに入れる</button></div>
+    </section>
+    """
+    wrong_set_html = product_html.replace("DZ-BT14", "DZ-BT13")
+    listing_urls = GProjectConnector.parse_search_html(DRAEGFORCE, search_html)
+    assert listing_urls == [
+        "https://gprojecttcg.xsrv.jp/products/detail/1",
+        "https://gprojecttcg.xsrv.jp/products/detail/2",
+    ]
+    offer = GProjectConnector.parse_product_html(DRAEGFORCE, listing_urls[0], product_html)
+    assert offer is not None
+    assert (offer.price_yen, offer.availability, offer.match_confidence) == (
+        330,
+        Availability.IN_STOCK,
+        MatchConfidence.EXACT_JAPANESE_NAME,
+    )
+    assert GProjectConnector.parse_product_html(DRAEGFORCE, listing_urls[1], wrong_set_html) is None
+
+
+def test_gproject_searches_one_japanese_name_and_keeps_the_sold_out_price() -> None:
+    requested: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(str(request.url))
+        if request.url.params.get("name"):
+            return httpx.Response(
+                200,
+                text='''<li class="ec-shelfGrid__item"><a href="/products/detail/1"><p>ユースベルク“龍吼燎騎・幻影”</p><p class="price02-default">￥330</p></a></li>''',
+            )
+        return httpx.Response(
+            200,
+            text='''<section class="ec-productRole"><h1 class="ec-productRole__title">ユースベルク“龍吼燎騎・幻影”</h1>
+            <p class="ec-price__price">￥330</p><ul class="ec-productRole__category"><li><a>【DZ-BT14】赫月ノ使者</a></li><li><a>RRR・RR</a></li></ul>
+            <div class="ec-productRole__btn"><button disabled>ただいま品切れ中です。</button></div></section>''',
+        )
+
+    async def run() -> list[StoreOffer]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await GProjectConnector(client).search(DRAEGFORCE)
+
+    offers = asyncio.run(run())
+    assert len(offers) == 1
+    assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (330, Availability.SOLD_OUT, None)
+    assert "category_id=1050" in requested[0]
+    assert "name=%E3%83%A6%E3%83%BC%E3%82%B9%E3%83%99%E3%83%AB%E3%82%AF" in requested[0]
+    assert requested[1] == "https://gprojecttcg.xsrv.jp/products/detail/1"
+
+
+def test_toreca_plaza_matches_exact_search_then_revalidates_the_product_page() -> None:
+    card = CardPrint(
+        set_code="DZ-BT13",
+        collector_number="SEC03",
+        rarity="SEC",
+        english_name="Liael=Amort",
+        japanese_name="決意と罪を抱く者 リィエル=アニムス",
+        source="test",
+    )
+    search_html = """
+    <ul><li class="c-item-list__item"><div class="c-item-list__ttl"><a href="?pid=1">
+    決意と罪を抱く者 リィエル=アニムス(SEC)(DZ-BT13/SEC03)[ヴァンガード]</a></div></li>
+    <li class="c-item-list__item"><div class="c-item-list__ttl"><a href="?pid=2">別のカード(DZ-BT13/SEC04)</a></div></li></ul>
+    """
+    product_html = '''<script>var Colorme = {"product":{"name":"決意と罪を抱く者 リィエル=アニムス(SEC)(DZ-BT13/SEC03)[ヴァンガード]","stock_num":1,"sales_price":80000,"sales_price_including_tax":80000}};
+    </script>'''
+    listing_urls = TorecaPlazaConnector.parse_search_html(card, search_html)
+    assert listing_urls == ["https://torecaplaza55.com?pid=1"]
+    offer = TorecaPlazaConnector.parse_product_html(card, listing_urls[0], product_html)
+    assert offer is not None
+    assert (offer.price_yen, offer.availability, offer.stock_count) == (80000, Availability.IN_STOCK, 1)
+
+
+def test_toreca_plaza_uses_one_exact_serial_search_then_only_matched_pages() -> None:
+    requested: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(str(request.url))
+        if request.url.params.get("mode") == "srh":
+            return httpx.Response(
+                200,
+                text='<li class="c-item-list__item"><div class="c-item-list__ttl"><a href="?pid=1">'
+                'エグザサベイト・ドラゴン(DZ-BT16/FFR02)</a></div></li>',
+            )
+        return httpx.Response(
+            200,
+            text='''<script>var Colorme = {"product":{"name":"エグザサベイト・ドラゴン(DZ-BT16/FFR02)","stock_num":0,"sales_price":980}};
+            </script>''',
+        )
+
+    async def run() -> list[StoreOffer]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await TorecaPlazaConnector(client).search(CARD)
+
+    offers = asyncio.run(run())
+    assert len(offers) == 1
+    assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (980, Availability.SOLD_OUT, 0)
+    assert "keyword=DZ-BT16%2FFFR02" in requested[0]
+    assert requested[1] == "https://torecaplaza55.com?pid=1"
+
+
+def test_pachipachi_matches_exact_serial_and_reports_numeric_stock() -> None:
+    html = """
+    <div class="card-wrapper product-card-wrapper"><a href="/products/exzabite?_pos=1">
+    DZ-BT16/FFR02エグザサベイト・ドラゴンFFR</a><p class="card__inventory">在庫：16点</p>
+    <span class="price-item price-item--regular">¥1,480 JPY</span></div>
+    <div class="card-wrapper product-card-wrapper"><a href="/products/other">DZ-BT16/FFR03別のカードFFR</a>
+    <p class="card__inventory">在庫：1点</p><span class="price-item price-item--regular">¥100 JPY</span></div>
+    <div class="card-wrapper product-card-wrapper"><a href="/products/sold">DZ-BT16/FFR02エグザサベイト・ドラゴンFFR</a>
+    <p class="card__inventory">在庫：0点</p><span class="price-item price-item--regular">¥980 JPY</span>売り切れ</div>
+    """
+    offers = PachipachiConnector.parse_html(CARD, html)
+    assert [(offer.price_yen, offer.availability, offer.stock_count) for offer in offers] == [
+        (1480, Availability.IN_STOCK, 16),
+        (980, Availability.SOLD_OUT, 0),
+    ]
+    assert offers[0].listing_url == "https://pachipachitoreka.myshopify.com/products/exzabite"
+
+
+def test_pachipachi_searches_only_the_exact_japanese_serial() -> None:
+    requested_params: list[dict[str, str]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested_params.append(dict(request.url.params))
+        return httpx.Response(200, text="")
+
+    async def run() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await PachipachiConnector(client).search(CARD)
+
+    asyncio.run(run())
+    assert requested_params == [{"q": "DZ-BT16/FFR02", "type": "product"}]
+
+
+def test_square_bushiroad_matches_exact_serial_before_its_rarity_suffix() -> None:
+    html = """
+    <ul><li class="list_item_cell"><a class="item_data_link" href="/product/1"><span class="goods_name">
+    エグザサベイト・ドラゴン[VG_DZ-BT16/FFR02FFR]</span><p class="selling_price"><span class="figure">1,280円</span></p>
+    <p class="stock">在庫数 4点</p></a></li>
+    <li class="list_item_cell"><a class="item_data_link" href="/product/2"><span class="goods_name">
+    別のカード[VG_DZ-BT16/FFR03FFR]</span><p class="selling_price"><span class="figure">100円</span></p>
+    <p class="stock">在庫数 1点</p></a></li>
+    <li class="list_item_cell"><a class="item_data_link" href="/product/3"><span class="goods_name">
+    エグザサベイト・ドラゴン[VG_DZ-BT16/FFR02FFR]</span><p class="selling_price"><span class="figure">980円</span></p>
+    <p class="stock">在庫なし</p></a></li></ul>
+    """
+    offers = SquareBushiroadConnector.parse_html(CARD, html)
+    assert [(offer.price_yen, offer.availability, offer.stock_count) for offer in offers] == [
+        (1280, Availability.IN_STOCK, 4),
+        (980, Availability.SOLD_OUT, None),
+    ]
+    assert offers[0].listing_url == "https://www.square-bushiroad.com/product/1"
+
+
+def test_square_bushiroad_searches_only_the_exact_japanese_serial() -> None:
+    requested_params: list[dict[str, str]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested_params.append(dict(request.url.params))
+        return httpx.Response(200, text="")
+
+    async def run() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await SquareBushiroadConnector(client).search(CARD)
+
+    asyncio.run(run())
+    assert requested_params == [{"keyword": "DZ-BT16/FFR02"}]
+
+
+def test_masters_guild_matches_exact_search_then_revalidates_the_product_page() -> None:
+    search_html = """
+    <table class="list"><tr><td><a href="?pid=ignored"></a><div class="name"><a href="?pid=1">
+    エグザサベイト・ドラゴン DZ-BT16/FFR02</a></div></td></tr>
+    <tr><td><div class="name"><a href="?pid=2">別のカード DZ-BT16/FFR03</a></div></td></tr></table>
+    """
+    product_html = '''<script>var Colorme = {"product":{"name":"エグザサベイト・ドラゴン DZ-BT16/FFR02","stock_num":4,"sales_price_including_tax":1280}};
+    </script>'''
+    listing_urls = MastersGuildConnector.parse_search_html(CARD, search_html)
+    assert listing_urls == ["https://guild.shop-pro.jp?pid=1"]
+    offer = MastersGuildConnector.parse_product_html(CARD, listing_urls[0], product_html)
+    assert offer is not None
+    assert (offer.price_yen, offer.availability, offer.stock_count) == (1280, Availability.IN_STOCK, 4)
+
+
+def test_masters_guild_uses_one_exact_serial_search_then_only_matched_pages() -> None:
+    requested: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(str(request.url))
+        if request.url.params.get("mode") == "srh":
+            return httpx.Response(
+                200,
+                text='<table class="list"><tr><td><a href="?pid=ignored"></a><div class="name"><a href="?pid=1">'
+                'エグザサベイト・ドラゴン DZ-BT16/FFR02</a></div></td></tr></table>',
+            )
+        return httpx.Response(
+            200,
+            text='''<script>var Colorme = {"product":{"name":"エグザサベイト・ドラゴン DZ-BT16/FFR02","stock_num":0,"sales_price":980}};
+            </script>''',
+        )
+
+    async def run() -> list[StoreOffer]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await MastersGuildConnector(client).search(CARD)
+
+    offers = asyncio.run(run())
+    assert len(offers) == 1
+    assert (offers[0].price_yen, offers[0].availability, offers[0].stock_count) == (980, Availability.SOLD_OUT, 0)
+    assert "mode=srh&keyword=DZ-BT16%2FFFR02" in requested[0]
+    assert requested[1] == "https://guild.shop-pro.jp?pid=1"
 
 
 def test_new_store_connectors_search_by_hyphenated_japanese_serial() -> None:

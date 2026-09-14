@@ -8,6 +8,7 @@ from telegram.ext import Application, ApplicationBuilder
 from scraperbot.bot import TelegramPriceBot
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.config import Settings
+from scraperbot.connectors.advantage import AdvantageConnector
 from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardmax import CardMaxConnector
 from scraperbot.connectors.cardrush import CardRushConnector
@@ -15,16 +16,22 @@ from scraperbot.connectors.clabo import CLaboConnector
 from scraperbot.connectors.avalon import AvalonConnector
 from scraperbot.connectors.amenitydream import AmenityDreamConnector
 from scraperbot.connectors.fullahead import FullAheadConnector
+from scraperbot.connectors.gamers import GamersConnector
+from scraperbot.connectors.gproject import GProjectConnector
 from scraperbot.connectors.isei import IseiConnector
 from scraperbot.connectors.manasource import ManaSourceConnector
 from scraperbot.connectors.manzokuya import ManzokuyaConnector
+from scraperbot.connectors.mastersguild import MastersGuildConnector
 from scraperbot.connectors.net193 import Net193Connector
 from scraperbot.connectors.noah import NoahConnector
 from scraperbot.connectors.olta import OltaConnector
 from scraperbot.connectors.pao import PAOConnector
+from scraperbot.connectors.pachipachi import PachipachiConnector
 from scraperbot.connectors.realize import RealizeConnector
 from scraperbot.connectors.ryuunoshippo import RyuunoshippoConnector
+from scraperbot.connectors.squarebushiroad import SquareBushiroadConnector
 from scraperbot.connectors.torecolo import TorecoloConnector
+from scraperbot.connectors.torecaplaza import TorecaPlazaConnector
 from scraperbot.connectors.vanhappy import VanHappyConnector
 from scraperbot.connectors.yuyutei import YuyuTeiConnector
 from scraperbot.services.comparison import ComparisonService
@@ -62,6 +69,13 @@ def build_application(settings: Settings | None = None) -> Application:
                 RyuunoshippoConnector(),
                 NoahConnector(),
                 IseiConnector(),
+                AdvantageConnector(),
+                GamersConnector(),
+                TorecaPlazaConnector(),
+                PachipachiConnector(),
+                SquareBushiroadConnector(),
+                MastersGuildConnector(),
+                GProjectConnector(),
             )
         ),
     )
