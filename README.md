@@ -1,138 +1,99 @@
 # JP Price Checker
 
-A local-first Cardfight!! Vanguard price-comparison Telegram bot. Users search
-by English card name (including partial names and reasonable typos), choose a
-matching print, and receive offers from the enabled Japanese stores.
+Local-first price comparison for Japanese **Cardfight!! Vanguard** cards. Search
+in English, choose the Japanese printing you mean, then compare the public
+offers from supported Japanese stores.
 
-The current and planned product requirements are recorded in
-[REQUIREMENTS.md](REQUIREMENTS.md), including promo serial-number search across
-all store connectors.
+## What you can do
 
-It does not translate while a user waits. The English card mapping lives in a
-local SQLite database and store connectors use the selected print identifier
-only after the user has chosen it.
+- Search English card names, aliases, partial names, and reasonable spelling
+  variations. A result groups the Japanese reprints of the same card together.
+- Search a Japanese serial directly—such as `D-PR/953`, `DPR953`, or
+  `D-PR 953`—when a new or unmapped promo has no English name yet.
+- Filter printings by rarity and holo/standard finish, then choose the exact
+  printing to compare.
+- See live price, sold-out status, and the listed quantity where a store makes
+  it public. Sold-out prices remain visible and are clearly labelled.
+- Use **Aggregate card prints** to compare every matching Japanese printing,
+  including reprints, and use the price-sort toggle inside the comparison pane
+  to reorder the offers already shown.
+- Use the same local catalogue and comparison service from a browser or a
+  Telegram bot. The browser works without a Telegram token.
 
-## What is implemented
+The app currently compares 26 Japanese stores. Most offers are verified by the
+exact Japanese serial; G-Project TCG does not display its serials, so it is
+accepted only after exact Japanese-name, set, and rarity checks and is labelled
+as such. A store failure does not prevent results from other stores.
 
-- Local FTS and fuzzy English-name search, including aliases and optional
-  trailing rarity: `/price Youthberk FFR`.
-- Explicitly labelled print finishes are kept separate from rarity. For
-  example, a Yuyu-Tei D-PR title ending in `H仕様` is recorded against that
-  exact Japanese serial as a holo finish, while preserving the original label
-  for display and exact-listing checks.
-- Filter a search with browser controls, or in Telegram/API text with
-  `rarity:FFR,SEC` and `finish:holo`. A finish filter intentionally retains
-  prints whose finish is not yet labelled rather than guessing they are
-  standard.
-- Use the far-right “Sort by lowest” filter-style button to order listed
-  offers immediately, including when a card has only one Japanese printing.
-  Offers remain labelled with their own print code, rarity, finish, stock, and
-  availability.
-- An importable official English catalogue, including lazy-loaded result pages,
-  retained as reference-only data for a future reviewed cross-region feature.
-- Concurrent exact-print comparison from Yuyu-Tei, BigWeb, Card Rush,
-  VanHappy, Card Shop Olta, Manzokuya, Mana Source, TCG Advantage, Gamers, Toreca Plaza 55, Pachipachi TCG, Square Bushiroad, Masters Guild, FullAhead, Amenity Dream,
-  Torecolo, Card Max, Cardshop Avalon, C-labo, REALiZE, PAO, 193net, and
-  Ryuunoshippo, TCG NOAH, Cardshop Isei, and G-Project TCG. G-Project does
-  not publish a printed serial: it performs one exact Japanese-name search and
-  accepts an offer only after its public product page confirms the matching
-  Japanese set and rarity category. Its offers are labelled accordingly; every
-  other connector uses a narrow Japanese-serial lookup and exact reference.
-- Card Shop Olta preserves its per-condition SKU price and exact quantity.
-  Manzokuya preserves a numeric quantity when shown (or a circle/cross stock
-  state), and Mana Source preserves its listed quantity or sold-out state.
-- English search is identity-first: a name and its aliases resolve to one
-  canonical Japanese card name, then return every linked Japanese printing.
-  Main-set, Special Series and D-PR reprints sharing that exact Japanese name
-  can be narrowed by rarity or finish. Japanese-name equality is the only
-  active grouping rule; English print serials are retained but never used as
-  mapping or equality evidence.
-- Per-store failures are isolated: one unavailable retailer does not prevent
-  the other price from being returned.
-- FullAhead enriches its search result from the selected product page to retain
-  the displayed stock quantity. Amenity Dream and Torecolo provide price and
-  stock directly in their public search results, including sold-out prices.
-- Card Max, Cardshop Avalon, and REALiZE read the quantity displayed on only
-  the exact matched product page. C-labo retains its public search row's price
-  when it is explicitly sold out.
-- PAO and 193net fetch only exact-matched product pages to retain quantity;
-  PAO also prefers the current sale price. Ryuunoshippo reports its public
-  result-row quantity and sold-out state.
-- TCG NOAH reports public result-row quantities. Cardshop Isei retains its
-  displayed price and in-stock/sold-out state; it does not publish a quantity.
-- A local Telegram long-polling runner. Deployment/webhook hosting is
-  deliberately not included yet.
+## Quick start
 
-## Local setup
+### 1. Create an isolated environment
 
-The project uses its own Conda environment at `.conda`; it does not need to
-install Python packages globally.
+JP Price Checker requires Python 3.11+ and keeps its packages inside this
+project's Conda environment—nothing is installed globally.
 
 ```sh
-conda activate "/Users/foonicholas/Documents/ChatGPT/PriceCheck Scraper/ScraperBot/.conda"
+conda create --prefix .conda python=3.12 -y
+conda activate "$(pwd)/.conda"
 python -m pip install --no-build-isolation .
+```
+
+For tests and development tools, install the optional development dependencies
+inside the same environment:
+
+```sh
+python -m pip install --no-build-isolation ".[dev]"
 pytest -q
 ```
 
-This installs only JP Price Checker into that Conda environment; all project
-dependencies are already isolated there. Use this normal local install rather
-than an editable install because the project path contains spaces.
+### 2. Build or refresh the local catalogue
 
-The full official English catalogue has already been built in the local,
-ignored `data/catalogue.sqlite3`. It is retained as reference-only data; its
-serials do not attach English names to Japanese prints. To refresh it later:
+The card database is local and intentionally not committed to Git. On a fresh
+clone, run the approved-source refresh once. It can take a while because it
+builds the Japanese master catalogue and promo mappings sequentially.
 
 ```sh
-scraperbot-import-official --all
+scraperbot-refresh-catalogue --apply --repair-regional
 ```
 
-For a smaller refresh, target individual official set codes:
+Check the current local coverage at any time without contacting a store:
 
 ```sh
-scraperbot-import-official --set DZ-BT15 --set D-BT06
+scraperbot-catalogue-status
 ```
 
-The importer is polite, sequential, retried on transient failures, and resumes
-completed expansions when rerun.
-
-Create `.env` from `.env.example`, insert the token created with Telegram's
-BotFather, then run locally:
-
-```sh
-scraperbot
-```
-
-Example user messages:
-
-```text
-/price Youthberk
-chronojet ffr
-blastr blade
-```
-
-The number and rarity shown in selection buttons identify the chosen print;
-users never need to remember or type them.
-
-## Use it in a browser
-
-Run the local browser interface in one terminal, then open
-`http://127.0.0.1:8787` on this computer:
+### 3. Run the browser app
 
 ```sh
 scraperbot-web
 ```
 
-It uses the same local database, natural-language search, and store comparison
-services as Telegram. It does not need a Telegram token and is bound to this
-computer only by default. You can run `scraperbot` in another terminal to use
-Telegram at the same time.
+Open [http://127.0.0.1:8787](http://127.0.0.1:8787). It is bound to your
+computer by default and needs no Telegram credentials.
 
-For now, Telegram and the browser show only prints with a Japanese store-search
-name. The full English catalogue remains in the database as reference data,
-while Fandom-backed or reviewed English names map to Japanese names for search.
-English-only printings are hidden because Yuyu-Tei does not stock them.
+### 4. Run the Telegram bot (optional)
 
-## Japanese-only and newly released cards
+Create `.env` from `.env.example`, put in the token from BotFather, then run:
+
+```sh
+scraperbot
+```
+
+Example searches:
+
+```text
+/price Youthberk
+chronojet ffr
+D-PR/953
+```
+
+You never need to remember a serial for an ordinary English-name search: select
+the desired printing from the presented results. Catalogue updates are manual
+and opt-in, so scheduled refreshes never generate uncontrolled retailer traffic.
+
+## Implementation details and catalogue maintenance
+
+### Japanese-only and newly released cards
 
 Japanese releases can arrive before Bushiroad publishes their official English
 card names. Refresh those cards in two explicit, local-only steps:
@@ -357,7 +318,7 @@ it with:
 scraperbot-import your-reviewed-cards.json
 ```
 
-## Add another retailer
+### Add another retailer
 
 Create a connector under `scraperbot/connectors/` that implements
 `StoreConnector.search(card)`. It must return only offers matching the selected
@@ -366,7 +327,7 @@ when the set is not listed or the store declines the request. Register it in
 both `scraperbot/main.py` and `scraperbot/web.py`; the comparison service will
 then query it concurrently.
 
-## Design
+### Technical design
 
 ```text
 English name → local SQLite search → chosen print → exact store lookups → sorted offers
