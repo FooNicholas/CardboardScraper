@@ -25,6 +25,17 @@ exact Japanese serial; G-Project TCG does not display its serials, so it is
 accepted only after exact Japanese-name, set, and rarity checks and is labelled
 as such. A store failure does not prevent results from other stores.
 
+## Store limitations
+
+- **Hobby Station:** its Vanguard search exposes the right public card, price,
+  and stock fields, but direct connector requests receive a JavaScript
+  verification page before results are returned. The app will not reproduce
+  that check or inject its cookie. It can be reconsidered with an official API,
+  data export, or explicit allowlisting.
+- **Dragon Star (Dorasuta):** no permitted, narrow Japanese-serial integration
+  has been verified. It remains unavailable until the store provides a suitable
+  access route.
+
 ## Quick start
 
 ### 1. Create an isolated environment

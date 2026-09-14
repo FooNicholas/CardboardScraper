@@ -128,7 +128,17 @@
   identity model now uses only exact canonical Japanese names, so no English
   serial can overwrite, group, or appear in Japanese price-search results.
 
-## Implementation plan and outstanding work
+## Current roadmap
+
+| Workstream | Status | Next condition or action |
+| --- | --- | --- |
+| Hobby Station connector | On hold — automated verification | Its public `VG-<set>-<collector>` search is suitable, but a direct request receives a JavaScript verification page that sets `eccube_bot_check`. Do not reproduce that check or inject its cookie. Reassess only with an official API, export, or explicit allowlisting. |
+| Dragon Star / Dorasuta connector | On hold | Reassess only when there is a permitted, narrow Japanese-serial integration route. No protection bypass. |
+| Other protected or new stores | Gate | Add a connector only with a permitted narrow print lookup, public price/stock fields, exact serial and finish validation, and no detection bypass. |
+| Catalogue and promo upkeep | Ongoing | Run the opt-in approved-source refresh for releases as needed. The 64 playable promos without direct mapping evidence remain Japanese-serial-searchable until evidence becomes available. |
+| Hosting and distribution | Deferred | Keep the browser and Telegram interfaces local-first until sharing or hosting is explicitly requested. |
+
+## Completed implementation record
 
 | Stage | Status | Outcome |
 | --- | --- | --- |
@@ -164,11 +174,6 @@
 | Square Bushiroad | Implemented | The connector uses one public Japanese-serial query. It validates the serial before Square's displayed rarity suffix and any explicit finish, then retains the result-row price and numeric stock. |
 | Masters Guild | Implemented | The connector uses one public formatted Japanese-serial search, then fetches only exact matched products. It revalidates the serial and explicit finish against each product's public structured data, and retains the tax-inclusive price and numeric stock. |
 | G-Project TCG | Implemented with documented non-serial confidence | The connector makes one public Japanese-name search inside G-Project's Vanguard category and fetches only exact-name candidates (maximum eight). It accepts a price only when the product page's Japanese name, set category, and rarity category match the selected Japanese print. G-Project does not publish a printed serial or stock quantity, so offers are labelled `exact_japanese_name`, retain price and in-stock/sold-out state, and report no quantity. |
-| Hobby Station | On hold — automated verification | The public Vanguard page does expose a narrow `VG-<set>-<collector>` inventory-code search, price, sold-out marker, and numeric/`◎` stock signal. A normal connector request instead receives a JavaScript “Confirming secure connection” page that sets an `eccube_bot_check` cookie before reloading. Do not reproduce that check or inject its cookie. Reassess only with an official API, data export, or explicit allowlisting. |
-| Candidate store connectors | No current unblocked candidates | Any future connector requires a permitted, narrow Japanese-print lookup and public price/stock fields. It must validate the printed serial and explicit finish before displaying an offer. |
-| Cloudflare-protected stores | On hold | Do not bypass protection or evade detection. Add a connector only after the store supplies a permitted API, data export, partner access, or explicit allowlisting for this app. |
-| Hosting | Deferred | Keep the Telegram bot and browser interface local-first until hosting is explicitly requested. |
-| Dorasuta | On hold | Do not add the Dorasuta connector at this time. Reassess only if a permitted, narrow exact-serial integration path is available; no detection bypass. |
 
 ### Planned promo implementation sequence
 
