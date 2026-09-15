@@ -145,6 +145,14 @@ Before sharing broadly, sign and notarize the macOS app with an Apple Developer
 ID, and build/sign the Windows download on Windows. The local build is useful
 for testing but does not replace those platform trust steps.
 
+The repository includes a manual **Build desktop downloads** Actions workflow
+for the first two downloads: macOS Apple silicon and Windows x64. Give it the
+public HTTPS URL of your reviewed `catalogue.sqlite3` release asset and the
+new catalogue version. It builds each platform on its matching GitHub-hosted
+operating system and returns downloadable build artifacts; it deliberately
+does not publish a release or sign an app on your behalf. Sign/notarize the
+artifacts, then upload them with the matching catalogue assets.
+
 ### Curator catalogue-release checklist
 
 1. Run the approved-source refresh locally, review its status, and correct any

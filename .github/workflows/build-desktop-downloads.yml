@@ -1,0 +1,91 @@
+name: Build desktop downloads
+
+on:
+  workflow_dispatch:
+    inputs:
+      catalogue_url:
+        description: Public HTTPS URL for the reviewed catalogue.sqlite3 release asset
+        required: true
+        type: string
+      catalogue_version:
+        description: Version displayed to users, for example 2026.09.15-dzbt17
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # GitHub documents macos-14 as its Apple-silicon hosted runner.
+          - name: macos-arm64
+            runner: macos-14
+            artifact_path: dist/JP Price Checker.app
+          - name: windows-x64
+            runner: windows-latest
+            artifact_path: dist/JP Price Checker
+    runs-on: ${{ matrix.runner }}
+    env:
+      CATALOGUE_URL: ${{ inputs.catalogue_url }}
+      CATALOGUE_VERSION: ${{ inputs.catalogue_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download the reviewed catalogue snapshot
+        shell: python
+        run: |
+          from pathlib import Path
+          from urllib.request import urlretrieve
+          import os
+
+          destination = Path("data/catalogue.sqlite3")
+          destination.parent.mkdir(parents=True, exist_ok=True)
+          urlretrieve(os.environ["CATALOGUE_URL"], destination)
+
+      - name: Install desktop build tools
+        run: python -m pip install --no-build-isolation ".[packaging]"
+
+      - name: Build native download
+        shell: python
+        run: |
+          import os
+          import subprocess
+          import sys
+
+          subprocess.run(
+              [
+                  sys.executable,
+                  "scripts/build_desktop.py",
+                  "--catalogue",
+                  "data/catalogue.sqlite3",
+                  "--version",
+                  os.environ["CATALOGUE_VERSION"],
+                  "--output",
+                  "dist",
+              ],
+              check=True,
+          )
+
+      - name: Upload native app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jp-price-checker-${{ matrix.name }}-${{ inputs.catalogue_version }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+
+      - name: Upload catalogue release assets
+        if: matrix.name == 'macos-arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalogue-assets-${{ inputs.catalogue_version }}
+          path: build/desktop-release/catalogue
+          if-no-files-found: error

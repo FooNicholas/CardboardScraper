@@ -136,7 +136,7 @@
 | Dragon Star / Dorasuta connector | On hold | Reassess only when there is a permitted, narrow Japanese-serial integration route. No protection bypass. |
 | Other protected or new stores | Gate | Add a connector only with a permitted narrow print lookup, public price/stock fields, exact serial and finish validation, and no detection bypass. |
 | Catalogue and promo upkeep | Ongoing | Run the opt-in approved-source refresh for releases as needed. The 64 playable promos without direct mapping evidence remain Japanese-serial-searchable until evidence becomes available. |
-| Desktop distribution | In progress | A native launcher, bundled per-user catalogue seed, explicit checksum-verified snapshot updates, and macOS build support are implemented. Build/sign the Windows release, notarize the macOS app, and publish public GitHub Release assets before sharing broadly. |
+| Desktop distribution | In progress | Native Apple-silicon macOS and Windows x64 build paths are implemented: the GitHub Actions workflow builds each on its matching operating system from a reviewed snapshot. Notarize/sign the artifacts and publish public GitHub Release assets before sharing broadly. |
 | Shared hosting | Deferred | Keep the browser and Telegram interfaces local-first until a rate-limited, authenticated hosting design is explicitly requested. |
 
 ## Completed implementation record
