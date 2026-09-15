@@ -189,6 +189,14 @@ def test_browser_ui_separates_print_aggregation_from_selected_print_sorting() ->
     assert "Activate to sort" in INDEX_HTML
 
 
+def test_browser_ui_only_checks_or_installs_catalogue_updates_after_a_user_action() -> None:
+    assert "Check catalogue update" in INDEX_HTML
+    assert "Install catalogue update" in INDEX_HTML
+    assert "checkCatalogueUpdate" in INDEX_HTML
+    assert "installCatalogueUpdate" in INDEX_HTML
+    assert "fetch('/api/catalogue-update',{method:'POST',headers:{'X-JP-Price-Checker':'1'}})" in INDEX_HTML
+
+
 def test_browser_ui_gives_each_desktop_panel_an_independent_scroll_container() -> None:
     assert "--pane-height:calc(100vh - 250px)" in INDEX_HTML
     assert ".result-list { min-height:0; overflow-y:auto; overscroll-behavior:contain;" in INDEX_HTML

@@ -14,6 +14,16 @@ from urllib.parse import parse_qs, urlsplit
 
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.config import Settings
+from scraperbot.distribution import (
+    CatalogueSnapshotError,
+    CatalogueUpdateClient,
+    local_version_path,
+    read_local_snapshot,
+    remove_catalogue_backup,
+    replace_catalogue_atomically,
+    restore_previous_catalogue,
+    seed_bundled_catalogue,
+)
 from scraperbot.connectors.advantage import AdvantageConnector
 from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardmax import CardMaxConnector
@@ -54,9 +64,17 @@ MAX_CHOICES = 40
 class LocalPriceCheckWeb:
     """Application-facing operations used by the local HTTP handler."""
 
-    def __init__(self, catalogue: CatalogueRepository, comparison: ComparisonService) -> None:
+    def __init__(
+        self,
+        catalogue: CatalogueRepository,
+        comparison: ComparisonService,
+        *,
+        update_client: CatalogueUpdateClient | None = None,
+    ) -> None:
         self.catalogue = catalogue
         self.comparison = comparison
+        self._catalogue_db = catalogue.path
+        self._update_client = update_client
         self._catalogue_lock = RLock()
 
     def search(
@@ -121,6 +139,63 @@ class LocalPriceCheckWeb:
         return self._family_comparison_payload(
             await self.comparison.compare_family(card, family, refresh=refresh)
         )
+
+    def promo_catalogue_page_url(self, card: CardPrint) -> str | None:
+        """Resolve stored promo locations from whichever snapshot is active."""
+        with self._catalogue_lock:
+            return self.catalogue.promo_catalogue_page_url(
+                "yuyutei", card.set_code, card.collector_number
+            )
+
+    def catalogue_update_status(self) -> dict[str, object | None]:
+        if not self._update_client:
+            return {"enabled": False, "status": "not_configured"}
+        return self._update_client.status(self._catalogue_db).to_dict()
+
+    def apply_catalogue_update(self) -> dict[str, object | None]:
+        """Apply a user-approved release snapshot without interrupting data integrity.
+
+        The file is fully downloaded and validated before the live connection is
+        closed. On a reopen failure the previous SQLite file is restored.
+        """
+        if not self._update_client or not self._update_client.enabled:
+            raise CatalogueSnapshotError("Catalogue updates are not configured for this app build.")
+        snapshot = self._update_client.fetch_snapshot()
+        local = read_local_snapshot(self._catalogue_db)
+        if local and local.catalogue_version == snapshot.catalogue_version and local.sha256 == snapshot.sha256:
+            return {
+                "enabled": True,
+                "status": "up_to_date",
+                "current_version": local.catalogue_version,
+                "available_version": snapshot.catalogue_version,
+                "generated_at": snapshot.generated_at,
+            }
+        staged = self._update_client.stage_snapshot(snapshot, self._catalogue_db.parent)
+        backup: Path | None = None
+        with self._catalogue_lock:
+            self.catalogue.close()
+            try:
+                backup = replace_catalogue_atomically(staged, self._catalogue_db, snapshot)
+                replacement = CatalogueRepository(self._catalogue_db)
+            except Exception:
+                restore_previous_catalogue(self._catalogue_db, backup)
+                # A restore might bring back an older database after its
+                # version sidecar was already written. Remove the sidecar so
+                # the next explicit check cannot mistake it for the new one.
+                local_version_path(self._catalogue_db).unlink(missing_ok=True)
+                self.catalogue = CatalogueRepository(self._catalogue_db)
+                raise
+            else:
+                self.catalogue = replacement
+                self.comparison.invalidate()
+                remove_catalogue_backup(backup)
+        return {
+            "enabled": True,
+            "status": "updated",
+            "current_version": snapshot.catalogue_version,
+            "available_version": snapshot.catalogue_version,
+            "generated_at": snapshot.generated_at,
+        }
 
     @staticmethod
     def _card_payload(card: CardPrint) -> dict[str, Any]:
@@ -188,7 +263,7 @@ class LocalPriceCheckWeb:
 
 
 class LocalWebRequestHandler(BaseHTTPRequestHandler):
-    """Same-origin, GET-only handler for a localhost UI."""
+    """Same-origin handler for the local browser UI."""
 
     application: LocalPriceCheckWeb
 
@@ -202,6 +277,12 @@ class LocalWebRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         parameters = parse_qs(request.query, keep_blank_values=True)
+        if request.path == "/api/catalogue-update":
+            try:
+                self._send_json(HTTPStatus.OK, self.application.catalogue_update_status())
+            except CatalogueSnapshotError as error:
+                self._send_json(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
+            return
         if request.path == "/api/search":
             try:
                 self._send_json(
@@ -252,7 +333,22 @@ class LocalWebRequestHandler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
 
     def do_POST(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
-        self._send_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "Only read-only requests are supported."})
+        request = urlsplit(self.path)
+        if request.path == "/api/catalogue-update":
+            if self.headers.get("X-JP-Price-Checker") != "1":
+                self._send_json(HTTPStatus.FORBIDDEN, {"error": "Catalogue updates must be started from this app."})
+                return
+            try:
+                self._send_json(HTTPStatus.OK, self.application.apply_catalogue_update())
+            except CatalogueSnapshotError as error:
+                self._send_json(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
+            except Exception:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {"error": "The catalogue update could not be installed. Your previous catalogue is still available."},
+                )
+            return
+        self._send_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "Only catalogue updates support POST."})
 
     def log_message(self, _: str, *args: object) -> None:
         """Keep ordinary browser requests out of the terminal."""
@@ -287,51 +383,56 @@ class LocalWebRequestHandler(BaseHTTPRequestHandler):
 def build_web_application(settings: Settings | None = None) -> LocalPriceCheckWeb:
     """Create the shared catalogue/store services without requiring Telegram."""
     settings = settings or Settings.from_environment()
+    seed_bundled_catalogue(settings.catalogue_db)
     catalogue = CatalogueRepository(settings.catalogue_db)
-    yuyutei = YuyuTeiConnector(
-        promo_page_url=lambda card: catalogue.promo_catalogue_page_url(
-            "yuyutei", card.set_code, card.collector_number
+    application = LocalPriceCheckWeb(
+        catalogue,
+        ComparisonService(()),
+        update_client=CatalogueUpdateClient(settings.catalogue_update_manifest_url),
+    )
+    yuyutei = YuyuTeiConnector(promo_page_url=application.promo_catalogue_page_url)
+    application.comparison = ComparisonService(
+        (
+            yuyutei,
+            BigWebConnector(),
+            CardRushConnector(),
+            VanHappyConnector(),
+            OltaConnector(),
+            ManzokuyaConnector(),
+            ManaSourceConnector(),
+            FullAheadConnector(),
+            AmenityDreamConnector(),
+            TorecoloConnector(),
+            CardMaxConnector(),
+            AvalonConnector(),
+            CLaboConnector(),
+            RealizeConnector(),
+            PAOConnector(),
+            Net193Connector(),
+            RyuunoshippoConnector(),
+            NoahConnector(),
+            IseiConnector(),
+            AdvantageConnector(),
+            GamersConnector(),
+            TorecaPlazaConnector(),
+            PachipachiConnector(),
+            SquareBushiroadConnector(),
+            MastersGuildConnector(),
+            GProjectConnector(),
         )
     )
-    return LocalPriceCheckWeb(
-        catalogue,
-        ComparisonService(
-            (
-                yuyutei,
-                BigWebConnector(),
-                CardRushConnector(),
-                VanHappyConnector(),
-                OltaConnector(),
-                ManzokuyaConnector(),
-                ManaSourceConnector(),
-                FullAheadConnector(),
-                AmenityDreamConnector(),
-                TorecoloConnector(),
-                CardMaxConnector(),
-                AvalonConnector(),
-                CLaboConnector(),
-                RealizeConnector(),
-                PAOConnector(),
-                Net193Connector(),
-                RyuunoshippoConnector(),
-                NoahConnector(),
-                IseiConnector(),
-                AdvantageConnector(),
-                GamersConnector(),
-                TorecaPlazaConnector(),
-                PachipachiConnector(),
-                SquareBushiroadConnector(),
-                MastersGuildConnector(),
-                GProjectConnector(),
-            )
-        ),
-    )
+    return application
+
+
+def create_server(application: LocalPriceCheckWeb, *, host: str = "127.0.0.1", port: int = 8787) -> ThreadingHTTPServer:
+    """Create a local-only HTTP server without beginning its request loop."""
+    handler = type("BoundLocalWebRequestHandler", (LocalWebRequestHandler,), {"application": application})
+    return ThreadingHTTPServer((host, port), handler)
 
 
 def serve(application: LocalPriceCheckWeb, *, host: str = "127.0.0.1", port: int = 8787) -> None:
     """Serve the UI locally. The default address is inaccessible from a network."""
-    handler = type("BoundLocalWebRequestHandler", (LocalWebRequestHandler,), {"application": application})
-    server = ThreadingHTTPServer((host, port), handler)
+    server = create_server(application, host=host, port=port)
     print(f"JP Price Checker is running at http://{host}:{port}")
     try:
         server.serve_forever()
@@ -380,6 +481,9 @@ INDEX_HTML = """<!doctype html>
     .hint { color:var(--muted); font-size:.88rem; margin:12px 0 20px; }
     .hint button,.comparison-head button { color:var(--muted); background:transparent; border-color:var(--line); padding:5px 9px; margin-left:5px; font-size:.8rem; }
     .hint button:hover,.comparison-head button:hover { color:var(--accent-hover); background:var(--accent-soft); border-color:#e6ad8b; }
+    .catalogue-tools { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin:-4px 0 20px; color:var(--muted); font-size:.82rem; }
+    .catalogue-tools button { color:var(--muted); background:transparent; border-color:var(--line); padding:6px 10px; font-size:.8rem; }
+    .catalogue-tools button:hover { color:var(--accent-hover); background:var(--accent-soft); border-color:#e6ad8b; }
     #status { min-height:1.5em; color:var(--muted); margin-bottom:12px; }
     #status.error { color:var(--danger); }
     .filters { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; margin:0 0 18px; padding:12px 14px; background:#fff9f2; border:1px solid var(--line); border-radius:12px; }
@@ -423,9 +527,10 @@ INDEX_HTML = """<!doctype html>
   <p class="intro">Search by English card name / Japanese serial number</p>
   <form id="search-form"><input id="query" type="search" maxlength="120" autocomplete="off" placeholder="Try: Youthberk, D-PR/953" autofocus><button id="search-button">Search</button></form>
   <div class="hint">Optional rarity at the end: <button type="button" data-query="Youthberk FFR">Youthberk FFR</button><button type="button" data-query="D-PR/953">D-PR/953</button></div>
+  <div class="catalogue-tools"><button type="button" id="catalogue-update-button">Check catalogue update</button><span id="catalogue-update-status" aria-live="polite"></span></div>
   <div id="status" aria-live="polite"></div><section id="filters" class="filters" aria-label="Filter matching printings" hidden></section><div class="workspace"><section class="print-panel"><p class="panel-label">Matching printings</p><section id="results" class="result-list"></section></section><section class="price-panel"><p class="panel-label">Price comparison</p><section id="comparison"></section></section></div>
 </main><script>
-const query = document.querySelector('#query'), form = document.querySelector('#search-form'), searchButton = document.querySelector('#search-button'), status = document.querySelector('#status'), filters = document.querySelector('#filters'), results = document.querySelector('#results'), comparison = document.querySelector('#comparison');
+const query = document.querySelector('#query'), form = document.querySelector('#search-form'), searchButton = document.querySelector('#search-button'), status = document.querySelector('#status'), filters = document.querySelector('#filters'), results = document.querySelector('#results'), comparison = document.querySelector('#comparison'), catalogueUpdateButton = document.querySelector('#catalogue-update-button'), catalogueUpdateStatus = document.querySelector('#catalogue-update-status');
 let selectedId = null, searchCards = [], activeRarities = new Set(), activeFinishes = new Set(), currentComparison = null, comparisonMode = null, offerSort = 'lowest';
 function setStatus(message, isError=false) { status.textContent = message; status.className = isError ? 'error' : ''; }
 function clear(node) { node.replaceChildren(); }
@@ -437,6 +542,10 @@ function renderCards() { clear(results); const cards=filteredCards(), total=sear
 function filterButton(label, selected, onClick) { const button=document.createElement('button'); button.type='button'; button.className='filter-button'+(selected ? ' active' : ''); button.textContent=label; button.setAttribute('aria-pressed',String(selected)); button.addEventListener('click',onClick); return button; }
 function renderFilters() { clear(filters); const rarities=[...new Set(searchCards.map(card=>card.rarity).filter(Boolean))].sort(), finishes=[...new Set(searchCards.map(card=>card.finish).filter(finish=>finish && finish!=='unknown'))].sort(), aggregate=aggregateCandidate(); if (!rarities.length && !finishes.length && !aggregate) { filters.hidden=true; return; } filters.hidden=false; if (rarities.length) { const group=document.createElement('div'); group.className='filter-group'; group.append(text('span','Rarity','filter-label')); for (const rarity of rarities) group.append(filterButton(rarity,activeRarities.has(rarity),()=>{ activeRarities.has(rarity) ? activeRarities.delete(rarity) : activeRarities.add(rarity); renderFilters(); renderCards(); })); filters.append(group); } if (finishes.length) { const group=document.createElement('div'); group.className='filter-group'; group.append(text('span','Finish','filter-label')); for (const finish of finishes) { const label=finish==='holo' ? 'Holo' : finish==='standard' ? 'Standard' : finish; group.append(filterButton(label,activeFinishes.has(finish),()=>{ activeFinishes.has(finish) ? activeFinishes.delete(finish) : activeFinishes.add(finish); renderFilters(); renderCards(); })); } filters.append(group); } if (activeRarities.size || activeFinishes.size) { const reset=document.createElement('button'); reset.type='button'; reset.className='filter-clear'; reset.textContent='Clear filters'; reset.addEventListener('click',()=>{ activeRarities.clear(); activeFinishes.clear(); renderFilters(); renderCards(); }); filters.append(reset); } if (aggregate) { const button=document.createElement('button'); button.type='button'; button.className='filter-button aggregate-button'; button.textContent='Aggregate card prints'; button.title='Compare prices across '+aggregate.family_print_count+' verified Japanese printing'+(aggregate.family_print_count===1?'':'s')+' of this card.'; button.setAttribute('aria-label',button.title); button.addEventListener('click',()=>compareFamily(aggregate.id)); filters.append(button); } }
 async function search(raw) { const value=(raw || query.value).trim(); if (!value) { setStatus('Enter a card name to search.', true); return; } query.value=value; clear(results); clear(comparison); clear(filters); filters.hidden=true; selectedId=null; searchCards=[]; currentComparison=null; comparisonMode=null; activeRarities.clear(); activeFinishes.clear(); setStatus('Finding matching prints…'); searchButton.disabled=true; try { const data=await readJson(await fetch('/api/search?q='+encodeURIComponent(value))); if (!data.cards.length) { setStatus('No Japanese-market print matched that name. Try a shorter spelling.'); return; } searchCards=data.cards; renderFilters(); renderCards(); } catch (error) { setStatus(error.message,true); } finally { searchButton.disabled=false; } }
+function showCatalogueStatus(message, isError=false) { catalogueUpdateStatus.textContent=message; catalogueUpdateStatus.style.color=isError ? 'var(--danger)' : ''; }
+async function checkCatalogueUpdate() { catalogueUpdateButton.disabled=true; showCatalogueStatus('Checking published catalogue…'); try { const data=await readJson(await fetch('/api/catalogue-update')); if (!data.enabled) { catalogueUpdateButton.hidden=true; showCatalogueStatus('Catalogue updates are included with this app release.'); return; } if (data.status==='up_to_date') { catalogueUpdateButton.textContent='Catalogue is current'; showCatalogueStatus('Version '+data.current_version+' is already installed.'); return; } catalogueUpdateButton.textContent='Install catalogue update'; catalogueUpdateButton.dataset.availableVersion=data.available_version || ''; showCatalogueStatus('Version '+(data.available_version || 'new')+' is ready. Installing replaces only your local card catalogue.'); } catch (error) { showCatalogueStatus(error.message,true); } finally { catalogueUpdateButton.disabled=false; } }
+async function installCatalogueUpdate() { const version=catalogueUpdateButton.dataset.availableVersion || 'this'; if (!window.confirm('Install catalogue version '+version+'? Your card mappings will update, but no store prices are saved.')) return; catalogueUpdateButton.disabled=true; showCatalogueStatus('Downloading and checking catalogue…'); try { const data=await readJson(await fetch('/api/catalogue-update',{method:'POST',headers:{'X-JP-Price-Checker':'1'}})); if (data.status==='updated') { catalogueUpdateButton.textContent='Catalogue is current'; delete catalogueUpdateButton.dataset.availableVersion; showCatalogueStatus('Catalogue version '+data.current_version+' is now installed.'); } else { catalogueUpdateButton.textContent='Catalogue is current'; showCatalogueStatus('Version '+data.current_version+' is already installed.'); } } catch (error) { showCatalogueStatus(error.message,true); } finally { catalogueUpdateButton.disabled=false; } }
+catalogueUpdateButton.addEventListener('click',()=>catalogueUpdateButton.dataset.availableVersion ? installCatalogueUpdate() : checkCatalogueUpdate());
 function safeLink(url) { try { const parsed=new URL(url); return ['https:','http:'].includes(parsed.protocol) ? parsed.href : null; } catch { return null; } }
 function highlightSelection() { document.querySelectorAll('.card[data-print-id]').forEach(card=>card.classList.toggle('active',Number(card.dataset.printId)===selectedId)); }
 function offerRow(offer, printLabel='') { const row=document.createElement('div'); row.className='offer'; const store=document.createElement(offer.listing_url ? 'a' : 'div'); store.textContent=(printLabel ? printLabel+' · ' : '')+offer.store_name+(offer.condition ? ' · '+offer.condition : ''); if (offer.listing_url) { const href=safeLink(offer.listing_url); if (href) { store.href=href; store.target='_blank'; store.rel='noopener noreferrer'; } } const detail=text('small',offer.raw_name); const storeWrap=document.createElement('div'); storeWrap.append(store,detail); const stock=Number.isInteger(offer.stock_count) ? offer.stock_count+' left' : offer.availability==='sold_out' ? '×' : offer.availability==='in_stock' ? '◯' : '?'; const finish=offer.finish_raw || (offer.finish==='holo' ? 'Holo' : offer.finish==='standard' ? 'Standard' : ''); const tags=[stock,finish].filter(Boolean).join(' · '); row.append(storeWrap,text('div',offer.price_display,offer.availability==='in_stock'?'price':'sold'),text('div',tags,'tag')); return row; }

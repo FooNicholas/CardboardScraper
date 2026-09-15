@@ -8,6 +8,7 @@ from telegram.ext import Application, ApplicationBuilder
 from scraperbot.bot import TelegramPriceBot
 from scraperbot.catalogue.repository import CatalogueRepository
 from scraperbot.config import Settings
+from scraperbot.distribution import seed_bundled_catalogue
 from scraperbot.connectors.advantage import AdvantageConnector
 from scraperbot.connectors.bigweb import BigWebConnector
 from scraperbot.connectors.cardmax import CardMaxConnector
@@ -40,6 +41,7 @@ from scraperbot.services.comparison import ComparisonService
 def build_application(settings: Settings | None = None) -> Application:
     """Assemble the local polling application without making network calls."""
     settings = settings or Settings.from_environment()
+    seed_bundled_catalogue(settings.catalogue_db)
     catalogue = CatalogueRepository(settings.catalogue_db)
     yuyutei = YuyuTeiConnector(
         promo_page_url=lambda card: catalogue.promo_catalogue_page_url(

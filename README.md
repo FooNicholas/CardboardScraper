@@ -102,6 +102,68 @@ You never need to remember a serial for an ordinary English-name search: select
 the desired printing from the presented results. Catalogue updates are manual
 and opt-in, so scheduled refreshes never generate uncontrolled retailer traffic.
 
+## Share as a desktop download
+
+The release build is for friends who only want to search cards: it includes a
+native launcher and one curated SQLite catalogue snapshot. It opens the
+same browser interface automatically, keeps the catalogue in that person's
+own application-data folder, and does not require Conda, Python, Git, a
+Telegram token, or a catalogue crawl.
+
+Build each operating system's download on that operating system. PyInstaller
+does not cross-compile a reliable macOS or Windows application.
+
+```sh
+python -m pip install --no-build-isolation ".[packaging]"
+python scripts/build_desktop.py --catalogue data/catalogue.sqlite3 --version 2026.09.15
+```
+
+The build puts the native application in `dist/` and writes matching release
+assets in `build/desktop-release/catalogue/`:
+
+- `catalogue.sqlite3`
+- `catalogue-manifest.json`
+
+Upload the two catalogue files to the same public GitHub Release as the
+desktop download. Keep those exact names. Packaged apps check GitHub's
+`releases/latest/download/catalogue-manifest.json` URL only when the user
+presses **Check catalogue update**. A user sees the incoming version and must
+explicitly choose **Install catalogue update**. The app downloads it over
+HTTPS, verifies the published SHA-256 checksum and SQLite schema, then swaps
+the local catalogue atomically. It never refreshes Bushiroad, Fandom, or a
+retailer from a friend's computer.
+
+Create a new release whenever the curator publishes a new snapshot; the app
+will see it as the latest release. Use a full desktop-app release as well when
+connector or application code changes. A private repository cannot serve
+these update assets to friends who lack repository access, so make the release
+assets public or host the manifest and database at another public HTTPS URL.
+`CATALOGUE_UPDATE_MANIFEST_URL` can override the release URL for a custom
+channel.
+
+Before sharing broadly, sign and notarize the macOS app with an Apple Developer
+ID, and build/sign the Windows download on Windows. The local build is useful
+for testing but does not replace those platform trust steps.
+
+### Curator catalogue-release checklist
+
+1. Run the approved-source refresh locally, review its status, and correct any
+   mapping issue before publishing.
+2. Create the snapshot assets, with a new date or release number:
+
+   ```sh
+   scraperbot-refresh-catalogue --apply --repair-regional
+   scraperbot-catalogue-status
+   scraperbot-build-catalogue-snapshot --output build/catalogue-release --version 2026.09.15
+   ```
+
+3. Upload the resulting `catalogue.sqlite3` and
+   `catalogue-manifest.json` to the GitHub Release. Do not upload `.env` or a
+   Telegram token.
+4. Build and upload the Mac and Windows app archives when the application
+   itself changed. Friends can otherwise update just their catalogue from the
+   in-app button.
+
 ## Implementation details and catalogue maintenance
 
 ### Japanese-only and newly released cards
