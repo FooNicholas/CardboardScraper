@@ -124,8 +124,9 @@ assets in `build/desktop-release/catalogue/`:
 - `catalogue.sqlite3`
 - `catalogue-manifest.json`
 
-Upload the two catalogue files to the same public GitHub Release as the
-desktop download. Keep those exact names. Packaged apps check GitHub's
+Upload the two catalogue files to a GitHub Release draft before building the
+desktop downloads, then publish that release when its signed app archives are
+ready. Keep those exact names. Packaged apps check GitHub's
 `releases/latest/download/catalogue-manifest.json` URL only when the user
 presses **Check catalogue update**. A user sees the incoming version and must
 explicitly choose **Install catalogue update**. The app downloads it over
@@ -133,7 +134,7 @@ HTTPS, verifies the published SHA-256 checksum and SQLite schema, then swaps
 the local catalogue atomically. It never refreshes Bushiroad, Fandom, or a
 retailer from a friend's computer.
 
-Create a new release whenever the curator publishes a new snapshot; the app
+Publish a new release whenever the curator publishes a new snapshot; the app
 will see it as the latest release. Use a full desktop-app release as well when
 connector or application code changes. A private repository cannot serve
 these update assets to friends who lack repository access, so make the release
@@ -146,12 +147,13 @@ ID, and build/sign the Windows download on Windows. The local build is useful
 for testing but does not replace those platform trust steps.
 
 The repository includes a manual **Build desktop downloads** Actions workflow
-for the first two downloads: macOS Apple silicon and Windows x64. Give it the
-public HTTPS URL of your reviewed `catalogue.sqlite3` release asset and the
-new catalogue version. It builds each platform on its matching GitHub-hosted
-operating system and returns downloadable build artifacts; it deliberately
-does not publish a release or sign an app on your behalf. Sign/notarize the
-artifacts, then upload them with the matching catalogue assets.
+for the first two downloads: macOS Apple silicon and Windows x64. First create
+a **draft** GitHub Release and attach the reviewed `catalogue.sqlite3` and
+`catalogue-manifest.json`. Give the workflow that release tag and the new
+catalogue version. It builds each platform on its matching GitHub-hosted
+operating system, packages each native app into a ZIP, and attaches those ZIPs
+to the same draft release. It does not publish a release or sign an app on
+your behalf. Sign/notarize the artifacts before publishing the draft.
 
 ### Curator catalogue-release checklist
 
@@ -165,9 +167,9 @@ artifacts, then upload them with the matching catalogue assets.
    scraperbot-build-catalogue-snapshot --output build/catalogue-release --version 2026.09.15
    ```
 
-3. Upload the resulting `catalogue.sqlite3` and
-   `catalogue-manifest.json` to the GitHub Release. Do not upload `.env` or a
-   Telegram token.
+3. Create a GitHub Release draft, then upload the resulting
+   `catalogue.sqlite3` and `catalogue-manifest.json` to it. Do not upload
+   `.env` or a Telegram token.
 4. Build and upload the Mac and Windows app archives when the application
    itself changed. Friends can otherwise update just their catalogue from the
    in-app button.

@@ -3,8 +3,8 @@ name: Build desktop downloads
 on:
   workflow_dispatch:
     inputs:
-      catalogue_url:
-        description: Public HTTPS URL for the reviewed catalogue.sqlite3 release asset
+      release_tag:
+        description: Existing draft GitHub Release tag that already contains catalogue.sqlite3
         required: true
         type: string
       catalogue_version:
@@ -13,7 +13,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -31,7 +31,8 @@ jobs:
             artifact_path: dist/JP Price Checker
     runs-on: ${{ matrix.runner }}
     env:
-      CATALOGUE_URL: ${{ inputs.catalogue_url }}
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
       CATALOGUE_VERSION: ${{ inputs.catalogue_version }}
     steps:
       - uses: actions/checkout@v4
@@ -41,15 +42,11 @@ jobs:
           python-version: "3.12"
 
       - name: Download the reviewed catalogue snapshot
-        shell: python
+        shell: bash
         run: |
-          from pathlib import Path
-          from urllib.request import urlretrieve
-          import os
-
-          destination = Path("data/catalogue.sqlite3")
-          destination.parent.mkdir(parents=True, exist_ok=True)
-          urlretrieve(os.environ["CATALOGUE_URL"], destination)
+          mkdir -p data
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern catalogue.sqlite3 --dir data
 
       - name: Install desktop build tools
         run: python -m pip install --no-build-isolation ".[packaging]"
@@ -75,17 +72,39 @@ jobs:
               check=True,
           )
 
+      - name: Archive native app
+        shell: python
+        run: |
+          from pathlib import Path
+          from shutil import make_archive
+
+          app = Path("${{ matrix.artifact_path }}")
+          release = Path("release")
+          release.mkdir(exist_ok=True)
+          make_archive(str(release / "jp-price-checker-${{ matrix.name }}-${{ inputs.catalogue_version }}"), "zip", app.parent, app.name)
+
       - name: Upload native app artifact
         uses: actions/upload-artifact@v4
         with:
           name: jp-price-checker-${{ matrix.name }}-${{ inputs.catalogue_version }}
-          path: ${{ matrix.artifact_path }}
+          path: release/jp-price-checker-${{ matrix.name }}-${{ inputs.catalogue_version }}.zip
           if-no-files-found: error
 
-      - name: Upload catalogue release assets
-        if: matrix.name == 'macos-arm64'
-        uses: actions/upload-artifact@v4
+  attach-to-draft-release:
+    name: Attach downloads to draft release
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Download native archives
+        uses: actions/download-artifact@v4
         with:
-          name: catalogue-assets-${{ inputs.catalogue_version }}
-          path: build/desktop-release/catalogue
-          if-no-files-found: error
+          pattern: jp-price-checker-*
+          merge-multiple: true
+          path: release
+
+      - name: Attach native downloads
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" release/*.zip --clobber --repo "$GITHUB_REPOSITORY"
